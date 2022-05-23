@@ -1,8 +1,17 @@
+const { expect, use } = require("chai");
+const { solidity } = require("ethereum-waffle");
 const { ethers, upgrades } = require("hardhat");
+use(solidity);
 
-describe("Token", function () {
+const TokenContract = "FurioTokenV1";
+
+describe("FurioToken", function () {
+    // RUN THIS BEFORE EACH TEST
+    beforeEach(async function () {
+        [owner, addr1, addr2, ...addrs] = await ethers.getSigners();
+        const Token = await ethers.getContractFactory(TokenContract);
+        const token = await upgrades.deployProxy(Token);
+    });
     it("Deploys", async function () {
-        const Token = await ethers.getContractFactory("Token");
-        await upgrades.deployProxy(Token, { kind: 'uups' });
     });
 });

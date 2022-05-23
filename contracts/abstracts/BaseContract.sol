@@ -1,33 +1,67 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.4;
 
+import "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
-abstract contract BaseContract is Initializable, UUPSUpgradeable, OwnableUpgradeable
-{
+/**
+ * @title BaseContract
+ * @author Steve Harmeyer
+ * @notice This is an abstract base contract to handle UUPS upgrades and pausing.
+ */
+
+/// @custom:security-contact security@furio.io
+abstract contract BaseContract is Initializable, PausableUpgradeable, OwnableUpgradeable, UUPSUpgradeable {
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() { _disableInitializers(); }
+
     /**
      * Contract initializer.
-     * @param safe_ The address of the Gnosis safe that will
-     * be managing the contract.
-     * @dev Calls all parent initializers and sets
-     * the owner to the Gnosis Safe address.
+     * @dev This intializes all the parent contracts.
      */
-    function __baseContract_init(address safe_) internal onlyInitializing {
+    function __BaseContract_init() internal onlyInitializing {
+        __Pausable_init();
         __Ownable_init();
         __UUPSUpgradeable_init();
-        transferOwnership(safe_);
     }
 
     /**
-     * Overrideable initializer.
-     * @param safe_ The address of the Gnosis safe that will
-     * be managing the contract.
-     * @dev Calls the __baseContract_init function.
+     * -------------------------------------------------------------------------
+     * ADMIN FUNCTIONS.
+     * -------------------------------------------------------------------------
      */
-    function initialize(address safe_) initializer public virtual
+
+    /**
+     * Pause contract.
+     * @dev This stops all operations with the contract.
+     */
+    function pause() public onlyOwner
     {
-        __baseContract_init(safe_);
+        _pause();
     }
+
+    /**
+     * Unpause contract.
+     * @dev This resumes all operations with the contract.
+     */
+    function unpause() public onlyOwner {
+        _unpause();
+    }
+
+    /**
+     * -------------------------------------------------------------------------
+     * HOOKS.
+     * -------------------------------------------------------------------------
+     */
+
+    /**
+     * @dev This prevents upgrades from anyone but owner.
+     */
+    function _authorizeUpgrade(address newImplementation)
+        internal
+        onlyOwner
+        override
+    {}
 }
