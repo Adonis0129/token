@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.4;
 
+import "../interfaces/IAddressBook.sol";
 import "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
@@ -28,6 +29,11 @@ abstract contract BaseContract is Initializable, PausableUpgradeable, OwnableUpg
     }
 
     /**
+     * Address book.
+     */
+    IAddressBook public addressBook;
+
+    /**
      * -------------------------------------------------------------------------
      * ADMIN FUNCTIONS.
      * -------------------------------------------------------------------------
@@ -37,7 +43,7 @@ abstract contract BaseContract is Initializable, PausableUpgradeable, OwnableUpg
      * Pause contract.
      * @dev This stops all operations with the contract.
      */
-    function pause() public onlyOwner
+    function pause() external onlyOwner
     {
         _pause();
     }
@@ -46,8 +52,18 @@ abstract contract BaseContract is Initializable, PausableUpgradeable, OwnableUpg
      * Unpause contract.
      * @dev This resumes all operations with the contract.
      */
-    function unpause() public onlyOwner {
+    function unpause() external onlyOwner {
         _unpause();
+    }
+
+    /**
+     * Set address book.
+     * @param address_ Address book address.
+     * @dev Sets the address book address.
+     */
+    function setAddressBook(address address_) public onlyOwner
+    {
+        addressBook = IAddressBook(address_);
     }
 
     /**

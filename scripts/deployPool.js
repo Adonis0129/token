@@ -4,15 +4,14 @@ require("dotenv").config();
 const addressBook = process.env.ADDRESS_BOOK || '';
 
 async function main() {
-    const Token = await ethers.getContractFactory("FurioToken");
-    const token = await upgrades.deployProxy(Token);
-    await token.deployed();
-    await token.setAddressBook(addressBook);
+    const Pool = await ethers.getContractFactory("FurioPool");
+    const pool = await upgrades.deployProxy(Pool);
+    await pool.deployed();
+    await pool.setAddressBook(addressBook);
     const AddressBook = await ethers.getContractFactory("AddressBook");
     const addressbook = await AddressBook.attach(addressBook);
-    await addressbook.set('token', token.address);
-    await token.mintLiquidity();
-    console.log("Token proxy deployed to:", token.address);
+    await addressbook.set('pool', pool.address);
+    console.log("Pool proxy deployed to:", pool.address);
 }
 
 main()
