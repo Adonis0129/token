@@ -32,6 +32,16 @@ contract FurioPool is BaseContract
      */
 
     /**
+     * Price.
+     * @return uint256 Price based off current token balances.
+     * @dev Returns price based off current token balances.
+     */
+    function price() external view returns (uint256)
+    {
+        return (paymentBalance() / tokenBalance()) * (10 ** 18);
+    }
+
+    /**
      * Payment balance.
      * @return uint256 Payment token balance.
      * @dev Returns contract balance for payment token.
