@@ -63,10 +63,9 @@ contract Claim is BaseContract
         IPresale _presale_ = _presale();
         require(address(_presale_) != address(0), "Presale contract not found");
         uint256 _balance_ = _presale_.balanceOf(owner_);
-        require(_balance_ > 0, "No NFTs owned");
         uint256 _value_;
-        for(uint256 i = 1; i <= _balance_; i++) {
-            _value_ += getTokenValue(_presale_.tokenOfOwnerByIndex(owner_, i - 1));
+        for(uint256 i = 0; i < _balance_; i++) {
+            _value_ += getTokenValue(_presale_.tokenOfOwnerByIndex(owner_, i));
         }
         return _value_;
     }
@@ -81,10 +80,9 @@ contract Claim is BaseContract
         IPresale _presale_ = _presale();
         require(address(_presale_) != address(0), "Presale contract not found");
         uint256 _balance_ = _presale_.balanceOf(owner_);
-        require(_balance_ > 0, "No NFTs owned");
-        uint256[] memory _owned_;
-        for(uint256 i = 1; i <= _balance_; i++) {
-            _owned_[i - 1] = _presale_.tokenOfOwnerByIndex(owner_, i - 1);
+        uint256[] memory _owned_ = new uint256[](_balance_);
+        for(uint256 i = 0; i < _balance_; i++) {
+            _owned_[i] = _presale_.tokenOfOwnerByIndex(owner_, i);
         }
         return _owned_;
     }

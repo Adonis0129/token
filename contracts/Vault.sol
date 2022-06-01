@@ -29,6 +29,5 @@ contract Vault is BaseContract
      */
     function deposit(address owner_, uint256 quantity_) external returns (bool)
     {
-
     }
 }
