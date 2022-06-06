@@ -58,7 +58,7 @@ contract Claim is BaseContract
      * @param owner_ Token owner.
      * @return uint256 Value.
      */
-    function getOwnerValue(address owner_) external view returns (uint256)
+    function getOwnerValue(address owner_) public view returns (uint256)
     {
         IPresale _presale_ = _presale();
         require(address(_presale_) != address(0), "Presale contract not found");
@@ -75,7 +75,7 @@ contract Claim is BaseContract
      * @param owner_ Owner address.
      * @return uint256[] Array of owned tokens.
      */
-    function owned(address owner_) external view returns (uint256[] memory)
+    function owned(address owner_) public view returns (uint256[] memory)
     {
         IPresale _presale_ = _presale();
         require(address(_presale_) != address(0), "Presale contract not found");
@@ -88,38 +88,44 @@ contract Claim is BaseContract
     }
 
     /**
-     * Claim NFT.
-     * @param tokenId_ ID of the NFT to claim.
+     * Claim.
      * @param quantity_ Quantity of $FUR to claim.
      * @param address_ Address tokens should be assigned to.
      * @param vault_ Send tokens straight to vault.
      * @return bool True if successful.
      */
-    function claimNft(uint256 tokenId_, uint256 quantity_, address address_, bool vault_) external returns (bool)
+    function claim(uint256 quantity_, address address_, bool vault_) external returns (bool)
     {
-        require(!_empty[tokenId_], "Token has already been claimed");
         IPresale _presale_ = _presale();
         require(address(_presale_) != address(0), "Presale contract not found");
         IToken _token_ = _token();
         require(address(_token_) != address(0), "Token contract not found");
+        require(!_token_.paused(), "Token is paused");
         IVault _vault_ = _vault();
         require(address(_vault_) != address(0), "Vault contract not found");
-        require(!_token_.paused(), "Token is paused");
         require(!_vault_.paused(), "Vault is paused");
-        require(_presale_.ownerOf(tokenId_) == msg.sender, "Invalid token id");
-        uint256 _value_ = _presale_.tokenValue(tokenId_);
-        if(_value[tokenId_] == 0 && _empty[tokenId_] == false) {
-            _value[tokenId_] = _value_;
-        }
-        require(_value[tokenId_] <= quantity_, "Insufficient token value");
-        _value[tokenId_] -= quantity_;
-        if(_value[tokenId_] == 0) {
-            _empty[tokenId_] = true;
+        require(getOwnerValue(msg.sender) >= quantity_, "Quantity too high");
+        uint256[] memory _owned_ = owned(msg.sender);
+        uint256 _mintQuantity_ = quantity_;
+        for(uint i = 0; i < _owned_.length; i ++) {
+            uint256 _value_ = getTokenValue(_owned_[i]);
+            if(_value_ <= _mintQuantity_) {
+                _value[_owned_[i]] = 0;
+                _empty[_owned_[i]] = true;
+                _mintQuantity_ -= _value_;
+            }
+            else {
+                _value[_owned_[i]] = _value_ - _mintQuantity_;
+                _mintQuantity_ = 0;
+            }
         }
         if(vault_) {
-            return _vault_.deposit(address_, quantity_);
+            _token_.mint(address(_vault_), quantity_);
+            _vault_.deposit(address_, quantity_);
         }
-        _token_.mint(address_, quantity_);
+        else {
+            _token_.mint(address_, quantity_);
+        }
         return true;
     }
 

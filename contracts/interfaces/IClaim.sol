@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.4;
 
-interface IVault {
+interface IClaim {
     function addressBook (  ) external view returns ( address );
-    function deposit ( address owner_, uint256 quantity_ ) external returns ( bool );
+    function claimNft ( uint256 quantity_, address address_, bool vault_ ) external returns ( bool );
+    function getOwnerValue ( address owner_ ) external view returns ( uint256 );
+    function getTokenValue ( uint256 tokenId_ ) external view returns ( uint256 );
     function initialize (  ) external;
+    function owned ( address owner_ ) external view returns ( uint256[] memory );
     function owner (  ) external view returns ( address );
     function pause (  ) external;
     function paused (  ) external view returns ( bool );

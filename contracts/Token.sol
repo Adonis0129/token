@@ -15,7 +15,7 @@ import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
  */
 
 /// @custom:security-contact security@furio.io
-contract FurioToken is BaseContract, ERC20Upgradeable
+contract Token is BaseContract, ERC20Upgradeable
 {
     /**
      * Contract initializer.
@@ -143,6 +143,11 @@ contract FurioToken is BaseContract, ERC20Upgradeable
      * ADMIN FUNCTIONS.
      * -------------------------------------------------------------------------
      */
+    function mint(address to_, uint256 quantity_) external {
+        require(msg.sender == addressBook.get("claim"), "Unauthorized");
+        super._mint(to_, quantity_);
+    }
+
     function mintLiquidity() external onlyOwner
     {
         super._mint(addressBook.get("pool"), 1000000000000000000000000);
