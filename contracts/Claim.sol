@@ -119,9 +119,10 @@ contract Claim is BaseContract
                 _mintQuantity_ = 0;
             }
         }
+        quantity_ = quantity_ * (10 ** 18);
         if(vault_) {
             _token_.mint(address(_vault_), quantity_);
-            _vault_.deposit(address_, quantity_);
+            _vault_.depositFor(address_, quantity_);
         }
         else {
             _token_.mint(address_, quantity_);

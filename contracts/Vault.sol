@@ -210,7 +210,7 @@ contract Vault is BaseContract
      * @param player_ Address of player.
      * @return uint256 Reward percentage.
      */
-    function rewardPercent(address player_) public returns (uint256)
+    function rewardPercent(address player_) public view returns (uint256)
     {
         if(maxed[player_]) {
             return maxedPercent[player_];
@@ -228,7 +228,7 @@ contract Vault is BaseContract
      * @dev This number may not reflect the actual number of claims, but instead
      * represents the number of claims used to determine participation status and rate.
      */
-    function effectiveClaims(address player_) public returns (uint256)
+    function effectiveClaims(address player_) public view returns (uint256)
     {
         uint256 _start_ = block.timestamp - lookback;
         uint256 _penaltyStart_ = block.timestamp - penaltyLookback;
@@ -247,14 +247,7 @@ contract Vault is BaseContract
         if(negative[player_] && _periodClaims_ < negativeClaims) {
             _periodClaims_ = negativeClaims;
         }
-        if(_periodClaims_ > 28) {
-            _periodClaims_ = 28;
-        }
-        if(_periodClaims_ >= negativeClaims) {
-            negative[player_] = true;
-        }
-        if(_penaltyClaims_ >= penaltyClaims) {
-            penalized[player_] = true;
+        if(_periodClaims_ > 28 || _penaltyClaims_ >= penaltyClaims) {
             _periodClaims_ = 28;
         }
         if(startTime[player_] < lookback && _periodClaims_ < neutralClaims) {
@@ -268,10 +261,9 @@ contract Vault is BaseContract
      * @param player_ Address of player.
      * @return uint256 Amount of reward tokens available
      */
-    function rewardAvailable(address player_) public returns (uint256)
+    function rewardAvailable(address player_) public view returns (uint256)
     {
-        uint256 _period_ = (block.timestamp - lastAction[player_]) / period;
-        uint256 _available_ = _period_ * rewardPercent(player_) * totalDeposit[player_];
+        uint256 _available_ = ((block.timestamp - lastAction[player_]) / period) * (rewardPercent(player_) / 10000) * totalDeposit[player_];
         if(_available_ + totalClaim[player_] > maxPayout) {
             _available_ = maxPayout - totalClaim[player_];
         }
@@ -300,6 +292,15 @@ contract Vault is BaseContract
         lastAction[player_] = block.timestamp;
         lastClaim[player_] = block.timestamp;
         totalClaim[player_] += _available_;
+        if(!maxed[player_]) {
+            uint256 _claims_ = effectiveClaims(player_);
+            if(_claims_ >= negativeClaims) {
+                negative[player_] = true;
+            }
+            if(_claims_ >= 28) {
+                penalized[player_] = true;
+            }
+        }
         IToken _token_ = _token();
         uint256 _balance_ = _token_.balanceOf(address(this));
         if(_balance_ < _available_) {
