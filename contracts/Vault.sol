@@ -41,6 +41,7 @@ contract Vault is BaseContract
         _properties.claimTax = 1000;
         _properties.maxReferralDepth = 15;
         _properties.teamWalletRequirement = 5;
+        _properties.teamWalletChildBonus = 2500;
         _properties.devWalletReceivesBonuses = true;
         // Rewards percentages based on 28 day claims.
         _rates[0] = 250;
@@ -136,6 +137,7 @@ contract Vault is BaseContract
         uint256 claimTax;
         uint256 maxReferralDepth;
         uint256 teamWalletRequirement;
+        uint256 teamWalletChildBonus;
         bool devWalletReceivesBonuses;
     }
     Properties private _properties;
@@ -152,6 +154,7 @@ contract Vault is BaseContract
     event Bonus(address particpant_, uint256 amount_);
     event Maxed(address participant_);
     event Complete(address participant_);
+    event TokensSent(address recipient_, uint256 amount_);
 
     /**
      * -------------------------------------------------------------------------
@@ -321,17 +324,8 @@ contract Vault is BaseContract
         }
         // Calculate the referral bonus.
         uint256 _referralBonus_ = _taxAmount_ * _properties.depositReferralBonus / 10000;
-        if(_referralBonus_ > 0) {
-            _payUpline(participant_, _referralBonus_);
-        }
-        if(_refundAmount_ > 0) {
-            IToken _token_ = _token();
-            uint256 _balance_ = _token_.balanceOf(address(this));
-            if(_balance_ < _refundAmount_) {
-                _token_.mint(address(this), _refundAmount_ - _balance_);
-            }
-            _token_.transfer(participant_, _refundAmount_);
-        }
+        _payUpline(participant_, _referralBonus_);
+        _sendTokens(participant_, _refundAmount_);
         return true;
     }
 
@@ -407,17 +401,8 @@ contract Vault is BaseContract
         }
         // Calculate the referral bonus.
         uint256 _referralBonus_ = _taxAmount_ * _properties.compoundReferralBonus / 10000;
-        if(_referralBonus_ > 0) {
-            _payUpline(participant_, _referralBonus_);
-        }
-        if(_refundAmount_ > 0) {
-            IToken _token_ = _token();
-            uint256 _balance_ = _token_.balanceOf(address(this));
-            if(_balance_ < _refundAmount_) {
-                _token_.mint(address(this), _refundAmount_ - _balance_);
-            }
-            _token_.transfer(participant_, _refundAmount_);
-        }
+        _payUpline(participant_, _referralBonus_);
+        _sendTokens(participant_, _refundAmount_);
         return true;
     }
 
@@ -485,12 +470,7 @@ contract Vault is BaseContract
             emit Tax(participant_, _taxAmount_);
         }
         // Pay the participant
-        IToken _token_ = _token();
-        uint256 _balance_ = _token_.balanceOf(address(this));
-        if(_balance_ < _amount_) {
-            _token_.mint(address(this), _amount_ - _balance_);
-        }
-        _token_.transfer(participant_, _amount_);
+        _sendTokens(participant_, _amount_);
         return true;
     }
 
@@ -586,6 +566,9 @@ contract Vault is BaseContract
      */
     function _payUpline(address participant_, uint256 bonus_) internal
     {
+        if(bonus_ == 0) {
+            return;
+        }
         // Get some data that will be used later.
         address _safe_ = addressBook.get("safe");
         uint256 _maxThreshold_ = _maxThreshold();
@@ -595,6 +578,8 @@ contract Vault is BaseContract
         if(_lastRewarded_ == address(0)) {
             _lastRewarded_ = participant_;
         }
+        // Set previous rewarded so we can pay out team bonuses if applicable.
+        address _previousRewarded_ = address(0);
         // Set depth to 1.
         for(uint _depth_ = 1; _depth_ <= _properties.maxReferralDepth; _depth_ ++) {
             if(_lastRewarded_ == _safe_) {
@@ -602,6 +587,7 @@ contract Vault is BaseContract
                 _lastRewarded_ = participant_;
             }
             // Move up the chain.
+            _previousRewarded_ = _lastRewarded_;
             _lastRewarded_ = _participants[_lastRewarded_].referrer;
             // Check for downline NFTs
             if(_downline_.balanceOf(_lastRewarded_) < _depth_) {
@@ -612,8 +598,17 @@ contract Vault is BaseContract
                 // Bonus is too high, so skip to the next referrer.
                 continue;
             }
+            if(_participants[_lastRewarded_].balance <= _participants[_lastRewarded_].claimed) {
+                // Participant has claimed more than deposited/compounded.
+                continue;
+            }
             // We found our winner!
             _lastRewarded[participant_] = _lastRewarded_;
+            if(_participants[_lastRewarded_].teamWallet) {
+                uint256 _childBonus_ = bonus_ * _properties.teamWalletChildBonus / 10000;
+                bonus_ -= _childBonus_;
+                _sendTokens(_previousRewarded_, _childBonus_);
+            }
             _participants[_lastRewarded_].balance += bonus_;
             _participants[_lastRewarded_].awarded += bonus_;
             // Fire bonus event.
@@ -667,6 +662,16 @@ contract Vault is BaseContract
      * GETTERS.
      * -------------------------------------------------------------------------
      */
+
+    /**
+     * Available rewards.
+     * @param participant_ Address of participant.
+     * @return uint256 Returns a participant's available rewards.
+     */
+    function availableRewards(address participant_) external view returns (uint256)
+    {
+        return _availableRewards(participant_);
+    }
 
     /**
      * Participant status.
@@ -749,6 +754,25 @@ contract Vault is BaseContract
             _participants[participant_].startTime = block.timestamp;
             _stats.totalParticipants ++;
         }
+    }
+
+    /**
+     * Send tokens.
+     * @param recipient_ Token recipient.
+     * @param amount_ Tokens to send.
+     */
+    function _sendTokens(address recipient_, uint256 amount_) internal
+    {
+        if(amount_ == 0) {
+            return;
+        }
+        IToken _token_ = _token();
+        uint256 _balance_ = _token_.balanceOf(address(this));
+        if(_balance_ < amount_) {
+            _token_.mint(address(this), amount_ - _balance_);
+        }
+        emit TokensSent(recipient_, amount_);
+        _token_.transfer(recipient_, amount_);
     }
 
 
