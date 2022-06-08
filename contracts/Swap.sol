@@ -16,7 +16,7 @@ import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
  */
 
 /// @custom:security-contact security@furio.io
-contract FurioSwapV1 is BaseContract
+contract Swap is BaseContract
 {
     /**
      * Contract initializer.

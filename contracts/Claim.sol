@@ -96,6 +96,32 @@ contract Claim is BaseContract
      */
     function claim(uint256 quantity_, address address_, bool vault_) external returns (bool)
     {
+        return _claim(quantity_, address_, vault_, address(0));
+    }
+
+    /**
+     * Claim.
+     * @param quantity_ Quantity of $FUR to claim.
+     * @param address_ Address tokens should be assigned to.
+     * @param vault_ Send tokens straight to vault.
+     * @param referrer_ Referrer address.
+     * @return bool True if successful.
+     */
+    function claim(uint256 quantity_, address address_, bool vault_, address referrer_) external returns (bool)
+    {
+        return _claim(quantity_, address_, vault_, referrer_);
+    }
+
+    /**
+     * Claim.
+     * @param quantity_ Quantity of $FUR to claim.
+     * @param address_ Address tokens should be assigned to.
+     * @param vault_ Send tokens straight to vault.
+     * @param referrer_ Referrer address.
+     * @return bool True if successful.
+     */
+    function _claim(uint256 quantity_, address address_, bool vault_, address referrer_) internal returns (bool)
+    {
         IPresale _presale_ = _presale();
         require(address(_presale_) != address(0), "Presale contract not found");
         IToken _token_ = _token();
@@ -122,7 +148,7 @@ contract Claim is BaseContract
         quantity_ = quantity_ * (10 ** 18);
         if(vault_) {
             _token_.mint(address(_vault_), quantity_);
-            _vault_.depositFor(address_, quantity_);
+            _vault_.depositFor(address_, quantity_, referrer_);
         }
         else {
             _token_.mint(address_, quantity_);
