@@ -240,6 +240,7 @@ contract Vault is BaseContract
      */
     function depositFor(address participant_, uint256 quantity_) public returns (bool)
     {
+        _addReferrer(participant_, address(0));
         if(msg.sender != addressBook.get("claim")) {
             // The claim contract can deposit on behalf of a user straight from a presale NFT.
             require(_token().transferFrom(participant_, address(this), quantity_), "Unable to transfer tokens");
@@ -288,6 +289,18 @@ contract Vault is BaseContract
         // Update participant available rewards
         _participants[participant_].availableRewards = _availableRewards(participant_);
         _participants[participant_].lastRewardUpdate = _timestamp_;
+        // Calculate tax amount.
+        uint256 _taxAmount_ = amount_ * taxRate_ / 10000;
+        if(_taxAmount_ > 0) {
+            amount_ -= _taxAmount_;
+            // Update contract tax stats.
+            _stats.totalTaxed ++;
+            _stats.totalTaxes += _taxAmount_;
+            // Update participant tax stats
+            _participants[participant_].taxed += _taxAmount_;
+            // Emit Tax event.
+            emit Tax(participant_, _taxAmount_);
+        }
         // Calculate refund amount if this deposit pushes them over the max threshold.
         uint256 _refundAmount_ = 0;
         if(_participants[participant_].balance + amount_ > _maxThreshold_) {
@@ -301,24 +314,12 @@ contract Vault is BaseContract
         _participants[participant_].deposited += amount_;
         // Emit Deposit event.
         emit Deposit(participant_, amount_);
-        // Calculate tax amount.
-        uint256 _taxAmount_ = amount_ * taxRate_ / 10000;
-        if(_taxAmount_ > 0) {
-            amount_ -= _taxAmount_;
-            // Update contract tax stats.
-            _stats.totalTaxed ++;
-            _stats.totalTaxes += _taxAmount_;
-            // Update participant tax stats
-            _participants[participant_].taxed += _taxAmount_;
-            // Emit Tax event.
-            emit Tax(participant_, _taxAmount_);
-        }
         // Credit the particpant.
         _participants[participant_].balance += amount_;
         // Check if participant is maxed.
         if(_participants[participant_].balance >= _maxThreshold_) {
-            _participants[participant_].maxed = true;
             _participants[participant_].maxedRate = _rewardPercent(participant_);
+            _participants[participant_].maxed = true;
             // Emit Maxed event
             emit Maxed(participant_);
         }
@@ -365,19 +366,6 @@ contract Vault is BaseContract
         // Update participant available rewards
         _participants[participant_].availableRewards = 0;
         _participants[participant_].lastRewardUpdate = _timestamp_;
-        // Calculate refund amount if this deposit pushes them over the max threshold.
-        uint256 _refundAmount_ = 0;
-        if(_participants[participant_].balance + _amount_ > _maxThreshold_) {
-            _refundAmount_ = _participants[participant_].balance + _amount_ - _maxThreshold_;
-            _amount_ -= _refundAmount_;
-        }
-        // Update contract compound stats.
-        _stats.totalCompounds ++;
-        _stats.totalCompounded += _amount_;
-        // Update participant compound stats.
-        _participants[participant_].compounded += _amount_;
-        // Emit Compound event.
-        emit Compound(participant_, _amount_);
         // Calculate tax amount.
         uint256 _taxAmount_ = _amount_ * taxRate_ / 10000;
         if(_taxAmount_ > 0) {
@@ -390,19 +378,29 @@ contract Vault is BaseContract
             // Emit Tax event.
             emit Tax(participant_, _taxAmount_);
         }
+        // Calculate if this claim pushes them over the max threshold.
+        if(_participants[participant_].balance + _amount_ > _maxThreshold_) {
+            _amount_ -= _participants[participant_].balance + _amount_ - _maxThreshold_;
+        }
+        // Update contract compound stats.
+        _stats.totalCompounds ++;
+        _stats.totalCompounded += _amount_;
+        // Update participant compound stats.
+        _participants[participant_].compounded += _amount_;
+        // Emit Compound event.
+        emit Compound(participant_, _amount_);
         // Credit the particpant.
         _participants[participant_].balance += _amount_;
         // Check if participant is maxed.
         if(_participants[participant_].balance >= _maxThreshold_) {
-            _participants[participant_].maxed = true;
             _participants[participant_].maxedRate = _rewardPercent(participant_);
+            _participants[participant_].maxed = true;
             // Emit Maxed event
             emit Maxed(participant_);
         }
         // Calculate the referral bonus.
         uint256 _referralBonus_ = _taxAmount_ * _properties.compoundReferralBonus / 10000;
         _payUpline(participant_, _referralBonus_);
-        _sendTokens(participant_, _refundAmount_);
         return true;
     }
 
@@ -432,13 +430,15 @@ contract Vault is BaseContract
         // Get some data that will be used a bunch.
         uint256 _timestamp_ = block.timestamp;
         uint256 _amount_ = _availableRewards(participant_);
+        uint256 _maxPayout_ = _maxPayout(participant_);
         // Checks.
         require(_amount_ > 0, "Invalid claim amount");
         require(!_participants[participant_].banned, "Participant is banned");
         require(!_participants[participant_].complete, "Participant is complete");
+        require(_participants[participant_].claimed < _maxPayout_, "Maximum payout has been reached");
         // Keep total under max payout.
-        if(_participants[participant_].claimed + _amount_ > _properties.maxPayout) {
-            _amount_ = _properties.maxPayout - _participants[participant_].claimed;
+        if(_participants[participant_].claimed + _amount_ > _maxPayout_) {
+            _amount_ = _maxPayout_ - _participants[participant_].claimed;
         }
         // Update the claims mapping.
         _claims[participant_].push(_timestamp_);
@@ -466,6 +466,18 @@ contract Vault is BaseContract
             _stats.totalTaxes += _taxAmount_;
             // Update participant tax stats
             _participants[participant_].taxed += _taxAmount_;
+            // Emit Tax event.
+            emit Tax(participant_, _taxAmount_);
+        }
+        // Calculate whale tax.
+        uint256 _whaleTax_ = _amount_ * _whaleTax(participant_) / 10000;
+        if(_whaleTax_ > 0) {
+            _amount_ -= _whaleTax_;
+            // Update contract tax stats.
+            _stats.totalTaxed ++;
+            _stats.totalTaxes += _whaleTax_;
+            // Update participant tax stats
+            _participants[participant_].taxed += _whaleTax_;
             // Emit Tax event.
             emit Tax(participant_, _taxAmount_);
         }
@@ -498,6 +510,9 @@ contract Vault is BaseContract
         }
         if(_participants[participant_].startTime >= block.timestamp - (_properties.period * _properties.lookbackPeriods) && _claims_ < _properties.neutralClaims) {
             _claims_ = _properties.neutralClaims; // Before the lookback periods are up, a user can only go up to neutral.
+        }
+        if(_participants[participant_].startTime == 0) {
+            _claims_ = _properties.neutralClaims; // User hasn't started yet.
         }
         return _claims_;
     }
@@ -607,7 +622,11 @@ contract Vault is BaseContract
             if(_participants[_lastRewarded_].teamWallet) {
                 uint256 _childBonus_ = bonus_ * _properties.teamWalletChildBonus / 10000;
                 bonus_ -= _childBonus_;
-                _sendTokens(_previousRewarded_, _childBonus_);
+                if(_participants[_previousRewarded_].balance + _childBonus_ > _maxThreshold_) {
+                    _childBonus_ = _maxThreshold_ - _participants[_previousRewarded_].balance;
+                }
+                _participants[_previousRewarded_].balance += _childBonus_;
+                _participants[_previousRewarded_].awarded += _childBonus_;
             }
             _participants[_lastRewarded_].balance += bonus_;
             _participants[_lastRewarded_].awarded += bonus_;
@@ -632,8 +651,9 @@ contract Vault is BaseContract
     {
         uint256 _period_ = ((block.timestamp - _participants[participant_].lastRewardUpdate) * 1000) / _properties.period;
         uint256 _available_ = ((_period_ * _rewardPercent(participant_) * _participants[participant_].balance) / 100000000) + _participants[participant_].availableRewards;
-        if(_available_ + _participants[participant_].claimed > _properties.maxPayout) {
-            _available_ = _properties.maxPayout - _participants[participant_].claimed;
+        uint256 _maxPayout_ = _maxPayout(participant_);
+        if(_available_ + _participants[participant_].claimed > _maxPayout_) {
+            _available_ = _maxPayout_ - _participants[participant_].claimed;
         }
         return _available_;
     }
@@ -674,6 +694,26 @@ contract Vault is BaseContract
     }
 
     /**
+     * Max payout.
+     * @param participant_ Address of participant.
+     * @return uint256 Returns a participant's max payout.
+     */
+    function maxPayout(address participant_) external view returns (uint256)
+    {
+        return _maxPayout(participant_);
+    }
+
+    /**
+     * Remaining payout.
+     * @param participant_ Address of participant.
+     * @return uint256 Returns a participant's remaining payout.
+     */
+    function remainingPayout(address participant_) external view returns (uint256)
+    {
+        return _maxPayout(participant_) - _participants[participant_].claimed;
+    }
+
+    /**
      * Participant status.
      * @param participant_ Address of participant.
      * @return uint256 Returns a participant's status (1 = negative, 2 = neutral, 3 = positive).
@@ -711,6 +751,15 @@ contract Vault is BaseContract
     }
 
     /**
+     * Max threshold.
+     * @return uint256 Maximum balance threshold.
+     */
+    function maxThreshold() external view returns (uint256)
+    {
+        return _maxThreshold();
+    }
+
+    /**
      * -------------------------------------------------------------------------
      * HELPER FUNCTIONS
      * -------------------------------------------------------------------------
@@ -740,7 +789,21 @@ contract Vault is BaseContract
      */
     function _maxThreshold() internal view returns (uint256)
     {
-        return _properties.maxPayout / (_properties.maxReturn / 1000);
+        return _properties.maxPayout * 10000 / _properties.maxReturn;
+    }
+
+    /**
+     * Max payout.
+     * @param participant_ Address of participant.
+     * @return uint256 Maximum payout based on balance of participant and max payout.
+     */
+    function _maxPayout(address participant_) internal view returns (uint256)
+    {
+        uint256 _maxPayout_ = _participants[participant_].balance * _properties.maxReturn / 1000;
+        if(_maxPayout_ > _properties.maxPayout) {
+            _maxPayout_ = _properties.maxPayout;
+        }
+        return _maxPayout_;
     }
 
     /**
@@ -775,6 +838,27 @@ contract Vault is BaseContract
         _token_.transfer(recipient_, amount_);
     }
 
+    /**
+     * Whale tax.
+     * @param participant_ Participant address.
+     * @return uint256 Whale tax amount.
+     */
+    function _whaleTax(address participant_) internal view returns (uint256)
+    {
+        uint256 _claimed_ = _participants[participant_].claimed;
+        uint256 _tax_ = 0;
+        if(_claimed_ > 10000 * (10 ** 18)) _tax_ = 500;
+        if(_claimed_ > 20000 * (10 ** 18)) _tax_ = 1000;
+        if(_claimed_ > 30000 * (10 ** 18)) _tax_ = 1500;
+        if(_claimed_ > 40000 * (10 ** 18)) _tax_ = 2000;
+        if(_claimed_ > 50000 * (10 ** 18)) _tax_ = 2500;
+        if(_claimed_ > 60000 * (10 ** 18)) _tax_ = 3000;
+        if(_claimed_ > 70000 * (10 ** 18)) _tax_ = 3500;
+        if(_claimed_ > 80000 * (10 ** 18)) _tax_ = 4000;
+        if(_claimed_ > 90000 * (10 ** 18)) _tax_ = 4500;
+        if(_claimed_ > 100000 * (10 ** 18)) _tax_ = 5000;
+        return _tax_;
+    }
 
     /**
      * -------------------------------------------------------------------------
