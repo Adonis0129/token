@@ -5,6 +5,7 @@ import "./abstracts/BaseContract.sol";
 import "@openzeppelin/contracts/utils/Base64.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC721/ERC721Upgradeable.sol";
+import "@openzeppelin/contracts/utils/Strings.sol";
 // Interfaces.
 import "./interfaces/IToken.sol";
 
@@ -23,14 +24,12 @@ contract Downline is BaseContract, ERC721Upgradeable
      */
     function initialize() initializer public
     {
-        __ERC721_init("Furio Downline NFT", "$FURDOWNLINE");
+        __ERC721_init("Furio Downline NFT", "$FURDL");
         __BaseContract_init();
         _properties.buyPrice = 5e16; // 5 $FUR.
         _properties.sellPrice = 4e16; // 4 $FUR.
         _properties.maxPerUser = 15; // 15 NFTs max per user.
-        _generationTracker.increment();
-        _generations[_generationTracker.current()].maxSupply = 10000;
-        _generations[_generationTracker.current()].baseUri = 'ipfs://QmPmvwSarTWNBYAcXhbGUCUUkGsiD7hXx8qpk49YwCAGcU/';
+        createGeneration(10000, 'ipfs://QmPmvwSarTWNBYAcXhbGUCUUkGsiD7hXx8qpk49YwCAGcU/');
     }
 
     using Counters for Counters.Counter;
@@ -111,7 +110,7 @@ contract Downline is BaseContract, ERC721Upgradeable
      * Buy an NFT.
      * @notice Allows a user to buy an NFT.
      */
-    function buy(uint256 quantity_) external whenNotPaused
+    function buy(uint256 quantity_) external whenNotPaused returns (bool)
     {
         IToken _token_ = IToken(addressBook.get("token"));
         require(address(_token_) != address(0), "Token not set");
@@ -122,26 +121,33 @@ contract Downline is BaseContract, ERC721Upgradeable
         for(uint256 i = 0; i < quantity_; i ++) {
             _tokenIdTracker.increment();
             uint256 _id_ = _tokenIdTracker.current();
-            super._mint(msg.sender, _id_);
+            _mint(msg.sender, _id_);
             emit PermanentURI(tokenURI(_id_), _id_);
         }
+        return true;
     }
 
     /**
      * Sell an NFT.
-     * @param tokenId_ ID if the token to sell.
+     * @param quantity_ Quantity to sell.
+     * @return bool True if successful.
      */
-    function sell(uint256 tokenId_) external whenNotPaused
+    function sell(uint256 quantity_) external whenNotPaused returns (bool)
     {
         IToken _token_ = IToken(addressBook.get("token"));
         require(address(_token_) != address(0), "Token not set");
-        require(ownerOf(tokenId_) == msg.sender, "Only owner can sell NFT");
-        uint256 _balance_ = _token_.balanceOf(address(this));
-        if(_balance_ < _properties.sellPrice) {
-            _token_.mint(address(this), _properties.sellPrice - _balance_);
+        require(balanceOf(msg.sender) >= quantity_, "Quantity is too high");
+        uint256 _refund_ = 0;
+        for(uint256 i = 0; i < quantity_; i ++) {
+            _refund_ += _properties.sellPrice;
+            super._burn(tokenOfOwnerByIndex(msg.sender, i));
         }
-        super._burn(tokenId_);
-        require(_token_.transfer(msg.sender, _properties.sellPrice), "Payment failed");
+        uint256 _balance_ = _token_.balanceOf(address(this));
+        if(_balance_ < _refund_) {
+            _token_.mint(address(this), _refund_ - _balance_);
+        }
+        require(_token_.transfer(msg.sender, _refund_), "Payment failed");
+        return true;
     }
 
     /**
@@ -157,10 +163,18 @@ contract Downline is BaseContract, ERC721Upgradeable
         for(uint256 i = 0; i < quantity_; i ++) {
             _tokenIdTracker.increment();
             uint256 _id_ = _tokenIdTracker.current();
-            super._mint(to_, _id_);
+            _mint(to_, _id_);
             emit PermanentURI(tokenURI(_id_), _id_);
         }
     }
+
+    function _mint(address to_, uint256 tokenId_) internal override
+    {
+        require(!_exists(tokenId_), "Token already exists");
+        super._mint(to_, tokenId_);
+        _tokenGenerations[tokenId_] = _generationTracker.current();
+    }
+
 
     /**
      * Find which tokens a user owns.
@@ -170,11 +184,12 @@ contract Downline is BaseContract, ERC721Upgradeable
      * @dev This function is simplified since each address can only own
      * one NFT. No need to do complex enumeration.
      */
-    function tokenOfOwnerByIndex(address owner_, uint256 index_) public view returns (uint256)
-    {
-        require(index_ == 0, "Owner index out of bounds");
+    function tokenOfOwnerByIndex(address owner_, uint256 index_) public view returns(uint256) {
         uint256 count = 0;
         for(uint256 i = 1; i <= _tokenIdTracker.current(); i++) {
+            if(!_exists(i)) {
+                continue;
+            }
             if(ownerOf(i) == owner_) {
                 if(count == index_) {
                     return i;
@@ -192,9 +207,8 @@ contract Downline is BaseContract, ERC721Upgradeable
      * to avoid putting metadata on IPFS.
      */
     function tokenURI(uint256 tokenId_) public view override returns (string memory) {
-        require(tokenId_ > 0 && tokenId_ <= _tokenIdTracker.current(), "Token does not exist");
-        string memory baseURI = _generations[_tokenGenerations[tokenId_]].baseUri;
-        return bytes(baseURI).length > 0 ? string(abi.encodePacked(baseURI, tokenId_)) : "";
+        require(_exists(tokenId_), "Token does not exist");
+        return string(abi.encodePacked(_generations[_tokenGenerations[tokenId_]].baseUri, Strings.toString(tokenId_)));
     }
 
     /**

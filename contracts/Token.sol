@@ -104,6 +104,11 @@ contract Token is BaseContract, ERC20Upgradeable
     }
 
     /**
+     * Vault transfer.
+     *
+     */
+
+    /**
      * -------------------------------------------------------------------------
      * INTERNAL FUNCTIONS.
      * -------------------------------------------------------------------------
@@ -144,13 +149,8 @@ contract Token is BaseContract, ERC20Upgradeable
      * -------------------------------------------------------------------------
      */
     function mint(address to_, uint256 quantity_) external {
-        require(msg.sender == addressBook.get("claim"), "Unauthorized");
+        require(_canMint(msg.sender), "Unauthorized");
         super._mint(to_, quantity_);
-    }
-
-    function mintLiquidity() external onlyOwner
-    {
-        super._mint(addressBook.get("pool"), 1000000000000000000000000);
     }
 
     /**
@@ -203,5 +203,33 @@ contract Token is BaseContract, ERC20Upgradeable
         override
     {
         super._beforeTokenTransfer(from, to, amount);
+    }
+
+    /**
+     * -------------------------------------------------------------------------
+     * ACCESS.
+     * -------------------------------------------------------------------------
+     */
+
+    /**
+     * Can mint?
+     * @param address_ Address of sender.
+     * @return bool True if trusted.
+     */
+    function _canMint(address address_) internal view returns (bool)
+    {
+        if(address_ == addressBook.get("claim")) {
+            return true;
+        }
+        if(address_ == addressBook.get("downline")) {
+            return true;
+        }
+        if(address_ == addressBook.get("pool")) {
+            return true;
+        }
+        if(address_ == addressBook.get("vault")) {
+            return true;
+        }
+        return false;
     }
 }

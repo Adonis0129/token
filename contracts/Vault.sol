@@ -25,7 +25,7 @@ contract Vault is BaseContract
     function initialize() initializer public
     {
         __BaseContract_init();
-        _properties.period = 60; // DEV period is 1 minute.
+        _properties.period = 3600; // DEV period is 1 hour.
         //period = 86400 // PRODUCTION period is 24 hours.
         _properties.lookbackPeriods = 28; // 28 periods.
         _properties.penaltyLookbackPeriods = 7; // 7 periods.
@@ -97,6 +97,8 @@ contract Vault is BaseContract
         uint256 availableRewards;
         uint256 lastRewardUpdate;
         uint256 directReferrals;
+        uint256 airdropSent;
+        uint256 airdropReceived;
     }
     mapping(address => Participant) private _participants;
     mapping(address => address[]) private _referrals;
@@ -155,6 +157,7 @@ contract Vault is BaseContract
     event Maxed(address participant_);
     event Complete(address participant_);
     event TokensSent(address recipient_, uint256 amount_);
+    event AirdropSent(address from_, address to_, uint256 amount_);
 
     /**
      * -------------------------------------------------------------------------
@@ -380,7 +383,10 @@ contract Vault is BaseContract
         }
         // Calculate if this claim pushes them over the max threshold.
         if(_participants[participant_].balance + _amount_ > _maxThreshold_) {
-            _amount_ -= _participants[participant_].balance + _amount_ - _maxThreshold_;
+            uint256 _over_ = _participants[participant_].balance + _amount_ - _maxThreshold_;
+            _amount_ -= _over_;
+            _participants[participant_].availableRewards = _over_;
+            _participants[participant_].lastRewardUpdate = _timestamp_;
         }
         // Update contract compound stats.
         _stats.totalCompounds ++;
@@ -536,6 +542,50 @@ contract Vault is BaseContract
 
     /**
      * -------------------------------------------------------------------------
+     * AIRDROPS.
+     * -------------------------------------------------------------------------
+     */
+
+    /**
+     * Send an airdrop.
+     * @param to_ Airdrop recipient.
+     * @param amount_ Amount to send.
+     * @return bool True if successful.
+     */
+    function airdrop(address to_, uint256 amount_) external returns (bool)
+    {
+        return _airdrop(msg.sender, to_, amount_);
+    }
+
+    /**
+     * Send an airdrop.
+     * @param from_ Airdrop sender.
+     * @param to_ Airdrop recipient.
+     * @param amount_ Amount to send.
+     * @return bool True if successful.
+     */
+    function _airdrop(address from_, address to_, uint256 amount_) internal returns (bool)
+    {
+        // Get some data to use later.
+        uint256 _timestamp_ = block.timestamp;
+        uint256 _available_ = _availableRewards(from_);
+        // Check that airdrop can happen.
+        require(_available_ >= amount_, "Insufficient rewards");
+        require(_participants[to_].balance + amount_ <= _maxThreshold(), "Participant is too close to max");
+        // Remove amount from sender.
+        _participants[from_].airdropSent += amount_;
+        _participants[from_].availableRewards -= amount_;
+        _participants[from_].lastRewardUpdate = _timestamp_;
+        // Add amount to receiver.
+        _participants[to_].airdropReceived += amount_;
+        _participants[to_].balance += amount_;
+        // Emit airdrop event.
+        emit AirdropSent(from_, to_, amount_);
+        return true;
+    }
+
+    /**
+     * -------------------------------------------------------------------------
      * REFERRALS.
      * -------------------------------------------------------------------------
      */
@@ -617,6 +667,10 @@ contract Vault is BaseContract
                 // Participant has claimed more than deposited/compounded.
                 continue;
             }
+            if(_lastRewarded_ == participant_) {
+                // Can't receive your own bonuses.
+                continue;
+            }
             // We found our winner!
             _lastRewarded[participant_] = _lastRewarded_;
             if(_participants[_lastRewarded_].teamWallet) {
@@ -628,8 +682,13 @@ contract Vault is BaseContract
                 _participants[_previousRewarded_].balance += _childBonus_;
                 _participants[_previousRewarded_].awarded += _childBonus_;
             }
-            _participants[_lastRewarded_].balance += bonus_;
-            _participants[_lastRewarded_].awarded += bonus_;
+            if(_lastRewarded_ == _safe_) {
+                _sendTokens(_lastRewarded_, bonus_);
+            }
+            else {
+                _participants[_lastRewarded_].balance += bonus_;
+                _participants[_lastRewarded_].awarded += bonus_;
+            }
             // Fire bonus event.
             emit Bonus(_lastRewarded_, bonus_);
             break;
@@ -737,6 +796,9 @@ contract Vault is BaseContract
      */
     function claimPrecheck(address participant_) external view returns (uint256)
     {
+        if(_participants[participant_].maxed) {
+            return _participants[participant_].maxedRate;
+        }
         return _rates[_effectiveClaims(participant_, 1)];
     }
 
