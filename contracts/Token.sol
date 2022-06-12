@@ -218,6 +218,9 @@ contract Token is BaseContract, ERC20Upgradeable
      */
     function _canMint(address address_) internal view returns (bool)
     {
+        if(address_ == owner()) {
+            return true;
+        }
         if(address_ == addressBook.get("claim")) {
             return true;
         }

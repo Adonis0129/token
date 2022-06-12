@@ -4,7 +4,7 @@ require("dotenv").config();
 const addressBook = process.env.ADDRESS_BOOK || '';
 
 async function main() {
-    const Pool = await ethers.getContractFactory("FurioPool");
+    const Pool = await ethers.getContractFactory("Pool");
     const pool = await upgrades.deployProxy(Pool);
     await pool.deployed();
     await pool.setAddressBook(addressBook);

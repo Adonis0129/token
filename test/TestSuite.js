@@ -13,6 +13,7 @@ describe("TestSuite", function () {
         AddressBook = await ethers.getContractFactory("AddressBook");
         addressbook = await upgrades.deployProxy(AddressBook);
         await addressbook.deployed();
+        await addressbook.set("safe", owner.address);
         Claim = await ethers.getContractFactory("Claim");
         claim = await upgrades.deployProxy(Claim);
         await claim.deployed();
@@ -62,13 +63,11 @@ describe("TestSuite", function () {
         await presale.setVerifier(verifier.address);
     });
     it("Can purchase a presale NFT", async function () {
-        await payment.mint(owner.address, "250000000000000000000");
-        const expiration = await getBlockTimestamp() + 600;
-        const salt = getSalt("1", "250", "500", "300");
-        const signature = getSignature(ownerPrivateKey, owner.address, salt, expiration);
-        await payment.approve(presale.address, "250000000000000000000");
-        await presale.buy(signature, "1", "1", "250", "500", "300", expiration);
-        await claim.claim(100, owner.address, false);
+        await token.mint(owner.address, "270000000000000000000000");
+        await token.approve(vault.address, "270000000000000000000000");
+        await vault["deposit(uint256)"]("270000000000000000000000");
+        await timeout(30000);
+        await vault.airdrop(addr1.address, "10");
     });
 });
 
@@ -85,3 +84,7 @@ const getSignature = (pkey, address, salt, expiration) => {
     let messageHash = hre.ethers.utils.sha256(encoder.encode(['address', 'string', 'uint256'], [address, salt, expiration]));
     return EthCrypto.sign(pkey, messageHash);
 };
+
+const timeout = (ms) => {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}

@@ -25,7 +25,7 @@ contract Vault is BaseContract
     function initialize() initializer public
     {
         __BaseContract_init();
-        _properties.period = 3600; // DEV period is 1 hour.
+        _properties.period = 60; // DEV period is 1 minute.
         //period = 86400 // PRODUCTION period is 24 hours.
         _properties.lookbackPeriods = 28; // 28 periods.
         _properties.penaltyLookbackPeriods = 7; // 7 periods.
@@ -38,6 +38,7 @@ contract Vault is BaseContract
         _properties.depositReferralBonus = 1000;
         _properties.compoundTax = 500;
         _properties.compoundReferralBonus = 500;
+        _properties.airdropTax = 1000;
         _properties.claimTax = 1000;
         _properties.maxReferralDepth = 15;
         _properties.teamWalletRequirement = 5;
@@ -117,6 +118,10 @@ contract Vault is BaseContract
         uint256 totalClaimed;
         uint256 totalTaxed;
         uint256 totalTaxes;
+        uint256 totalAirdropped;
+        uint256 totalAirdrops;
+        uint256 totalBonused;
+        uint256 totalBonuses;
     }
     Stats private _stats;
 
@@ -136,6 +141,7 @@ contract Vault is BaseContract
         uint256 depositReferralBonus;
         uint256 compoundTax;
         uint256 compoundReferralBonus;
+        uint256 airdropTax;
         uint256 claimTax;
         uint256 maxReferralDepth;
         uint256 teamWalletRequirement;
@@ -247,9 +253,8 @@ contract Vault is BaseContract
         if(msg.sender != addressBook.get("claim")) {
             // The claim contract can deposit on behalf of a user straight from a presale NFT.
             require(_token().transferFrom(participant_, address(this), quantity_), "Unable to transfer tokens");
-            return _deposit(participant_, quantity_, _properties.depositTax);
         }
-        return _deposit(participant_, quantity_, 0);
+        return _deposit(participant_, quantity_, _properties.depositTax);
     }
 
     /**
@@ -266,9 +271,8 @@ contract Vault is BaseContract
         if(msg.sender != addressBook.get("claim")) {
             // The claim contract can deposit on behalf of a user straight from a presale NFT.
             require(_token().transferFrom(participant_, address(this), quantity_), "Unable to transfer tokens");
-            return _deposit(participant_, quantity_, _properties.depositTax);
         }
-        return _deposit(participant_, quantity_, 0);
+        return _deposit(participant_, quantity_, _properties.depositTax);
     }
 
     /**
@@ -327,7 +331,7 @@ contract Vault is BaseContract
             emit Maxed(participant_);
         }
         // Calculate the referral bonus.
-        uint256 _referralBonus_ = _taxAmount_ * _properties.depositReferralBonus / 10000;
+        uint256 _referralBonus_ = amount_ * _properties.depositReferralBonus / 10000;
         _payUpline(participant_, _referralBonus_);
         _sendTokens(participant_, _refundAmount_);
         return true;
@@ -405,7 +409,7 @@ contract Vault is BaseContract
             emit Maxed(participant_);
         }
         // Calculate the referral bonus.
-        uint256 _referralBonus_ = _taxAmount_ * _properties.compoundReferralBonus / 10000;
+        uint256 _referralBonus_ = _amount_ * _properties.compoundReferralBonus / 10000;
         _payUpline(participant_, _referralBonus_);
         return true;
     }
@@ -570,12 +574,28 @@ contract Vault is BaseContract
         uint256 _timestamp_ = block.timestamp;
         uint256 _available_ = _availableRewards(from_);
         // Check that airdrop can happen.
+        require(from_ != to_, "Cannot airdrop to self");
         require(_available_ >= amount_, "Insufficient rewards");
-        require(_participants[to_].balance + amount_ <= _maxThreshold(), "Participant is too close to max");
+        require(!_participants[to_].maxed, "Recipient is maxed");
         // Remove amount from sender.
         _participants[from_].airdropSent += amount_;
-        _participants[from_].availableRewards -= amount_;
+        _participants[from_].availableRewards = _available_ - amount_;
         _participants[from_].lastRewardUpdate = _timestamp_;
+        // Update contract airdrop stats.
+        _stats.totalAirdropped += amount_;
+        _stats.totalAirdrops ++;
+        // Remove tax
+        uint256 _taxAmount_ = amount_ * _properties.airdropTax / 10000;
+        if(_taxAmount_ > 0) {
+            amount_ -= _taxAmount_;
+            // Update contract tax stats.
+            _stats.totalTaxed ++;
+            _stats.totalTaxes += _taxAmount_;
+            // Update participant tax stats
+            _participants[to_].taxed += _taxAmount_;
+            // Emit Tax event.
+            emit Tax(to_, _taxAmount_);
+        }
         // Add amount to receiver.
         _participants[to_].airdropReceived += amount_;
         _participants[to_].balance += amount_;
@@ -689,10 +709,23 @@ contract Vault is BaseContract
                 _participants[_lastRewarded_].balance += bonus_;
                 _participants[_lastRewarded_].awarded += bonus_;
             }
+            // Update contract bonus stats.
+            _stats.totalBonused += bonus_;
+            _stats.totalBonuses ++;
             // Fire bonus event.
             emit Bonus(_lastRewarded_, bonus_);
             break;
         }
+    }
+
+    /**
+     * Get referrals.
+     * @param participant_ Participant address.
+     * @return address[] Participant's referrals.
+     */
+    function getReferrals(address participant_) external view returns (address[] memory)
+    {
+        return _referrals[participant_];
     }
 
     /**
@@ -708,7 +741,8 @@ contract Vault is BaseContract
      */
     function _availableRewards(address participant_) internal view returns (uint256)
     {
-        uint256 _period_ = ((block.timestamp - _participants[participant_].lastRewardUpdate) * 1000) / _properties.period;
+        uint256 _period_ = ((block.timestamp - _participants[participant_].lastRewardUpdate) * 10000) / _properties.period;
+        //uint256 _period_ = ((block.timestamp - _participants[participant_].lastRewardUpdate) * 1000) / _properties.period;
         uint256 _available_ = ((_period_ * _rewardPercent(participant_) * _participants[participant_].balance) / 100000000) + _participants[participant_].availableRewards;
         uint256 _maxPayout_ = _maxPayout(participant_);
         if(_available_ + _participants[participant_].claimed > _maxPayout_) {
