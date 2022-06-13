@@ -3,6 +3,8 @@ pragma solidity ^0.8.4;
 
 interface IVault {
     function addressBook (  ) external view returns ( address );
+    function airdrop ( address to_, uint256 amount_ ) external returns ( bool );
+    function availableRewards ( address participant_ ) external view returns ( uint256 );
     function claim (  ) external returns ( bool );
     function claimPrecheck ( address participant_ ) external view returns ( uint256 );
     function compound (  ) external returns ( bool );
@@ -11,12 +13,18 @@ interface IVault {
     function depositFor ( address participant_, uint256 quantity_ ) external returns ( bool );
     function depositFor ( address participant_, uint256 quantity_, address referrer_ ) external returns ( bool );
     function initialize (  ) external;
+    function maxPayout ( address participant_ ) external view returns ( uint256 );
+    function maxThreshold (  ) external view returns ( uint256 );
     function owner (  ) external view returns ( address );
+    function participantBalance ( address participant_ ) external view returns ( uint256 );
+    function participantMaxed ( address participant_ ) external view returns ( bool );
     function participantStatus ( address participant_ ) external view returns ( uint256 );
     function pause (  ) external;
     function paused (  ) external view returns ( bool );
     function proxiableUUID (  ) external view returns ( bytes32 );
+    function remainingPayout ( address participant_ ) external view returns ( uint256 );
     function renounceOwnership (  ) external;
+    function rewardRate ( address participant_ ) external view returns ( uint256 );
     function setAddressBook ( address address_ ) external;
     function transferOwnership ( address newOwner ) external;
     function unpause (  ) external;

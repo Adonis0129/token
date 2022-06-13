@@ -2,6 +2,7 @@
 pragma solidity ^0.8.4;
 
 import "../interfaces/IAddressBook.sol";
+import "../interfaces/ILogger.sol";
 import "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
@@ -80,4 +81,10 @@ abstract contract BaseContract is Initializable, PausableUpgradeable, OwnableUpg
         onlyOwner
         override
     {}
+
+    /**
+     * -------------------------------------------------------------------------
+     * HELPERS.
+     * -------------------------------------------------------------------------
+     */
 }

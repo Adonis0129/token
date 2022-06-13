@@ -25,7 +25,7 @@ contract Vault is BaseContract
     function initialize() initializer public
     {
         __BaseContract_init();
-        _properties.period = 60; // DEV period is 1 minute.
+        _properties.period = 3600; // DEV period is 1 minute.
         //period = 86400 // PRODUCTION period is 24 hours.
         _properties.lookbackPeriods = 28; // 28 periods.
         _properties.penaltyLookbackPeriods = 7; // 7 periods.
@@ -250,7 +250,7 @@ contract Vault is BaseContract
     function depositFor(address participant_, uint256 quantity_) public returns (bool)
     {
         _addReferrer(participant_, address(0));
-        if(msg.sender != addressBook.get("claim")) {
+        if(msg.sender != addressBook.get("claim") && msg.sender != addressBook.get("swap")) {
             // The claim contract can deposit on behalf of a user straight from a presale NFT.
             require(_token().transferFrom(participant_, address(this), quantity_), "Unable to transfer tokens");
         }
@@ -268,7 +268,7 @@ contract Vault is BaseContract
     function depositFor(address participant_, uint256 quantity_, address referrer_) public returns (bool)
     {
         _addReferrer(participant_, referrer_);
-        if(msg.sender != addressBook.get("claim")) {
+        if(msg.sender != addressBook.get("claim") && msg.sender != addressBook.get("swap")) {
             // The claim contract can deposit on behalf of a user straight from a presale NFT.
             require(_token().transferFrom(participant_, address(this), quantity_), "Unable to transfer tokens");
         }
@@ -562,6 +562,40 @@ contract Vault is BaseContract
     }
 
     /**
+     * Send an airdrop to your team.
+     * @param amount_ Amount to send.
+     * @param minBalance_ Minimum balance to qualify.
+     * @param maxBalance_ Maximum balance to qualify.
+     * @return bool True if successful.
+     */
+    function airdropTeam(uint256 amount_, uint256 minBalance_, uint256 maxBalance_) external returns (bool)
+    {
+        address[] memory _team_ = _referrals[msg.sender];
+        uint256 _count_;
+        // Loop through first to get number of qualified accounts.
+        for(uint256 i = 0; i < _team_.length; i ++) {
+            if(_team_[i] == msg.sender) {
+                continue;
+            }
+            if(_participants[_team_[i]].balance >= minBalance_ && _participants[_team_[i]].balance <= maxBalance_ && !_participants[_team_[i]].maxed) {
+                _count_ ++;
+            }
+        }
+        require(_count_ > 0, "No qualified accounts exist");
+        uint256 _airdropAmount_ = amount_ / _count_;
+        // Send an airdrop to each qualified account.
+        for(uint256 i = 0; i < _team_.length; i ++) {
+            if(_team_[i] == msg.sender) {
+                continue;
+            }
+            if(_participants[_team_[i]].balance >= minBalance_ && _participants[_team_[i]].balance <= maxBalance_ && !_participants[_team_[i]].maxed) {
+                _airdrop(msg.sender, _team_[i], _airdropAmount_);
+            }
+        }
+        return true;
+    }
+
+    /**
      * Send an airdrop.
      * @param from_ Airdrop sender.
      * @param to_ Airdrop recipient.
@@ -571,16 +605,16 @@ contract Vault is BaseContract
     function _airdrop(address from_, address to_, uint256 amount_) internal returns (bool)
     {
         // Get some data to use later.
-        uint256 _timestamp_ = block.timestamp;
-        uint256 _available_ = _availableRewards(from_);
+        IToken _token_ = _token();
+        uint256 _available_ = _token_.balanceOf(from_);
         // Check that airdrop can happen.
         require(from_ != to_, "Cannot airdrop to self");
-        require(_available_ >= amount_, "Insufficient rewards");
+        require(_available_ >= amount_, "Insufficient balance");
         require(!_participants[to_].maxed, "Recipient is maxed");
-        // Remove amount from sender.
+        // Transfer from sender to vault.
+        require(_token_.transferFrom(from_, address(this), amount_), "Token transfer failed");
+        // Update sender airdrop stats.
         _participants[from_].airdropSent += amount_;
-        _participants[from_].availableRewards = _available_ - amount_;
-        _participants[from_].lastRewardUpdate = _timestamp_;
         // Update contract airdrop stats.
         _stats.totalAirdropped += amount_;
         _stats.totalAirdrops ++;
@@ -822,6 +856,27 @@ contract Vault is BaseContract
         }
         return _status_;
     }
+
+    /**
+     * Participant balance.
+     * @param participant_ Address of participant.
+     * @return uint256 Participant's balance.
+     */
+    function participantBalance(address participant_) external view returns (uint256)
+    {
+        return _participants[participant_].balance;
+    }
+
+    /**
+     * Participant maxed.
+     * @param participant_ Address of participant.
+     * @return bool Whether the participant is maxed or not.
+     */
+    function participantMaxed(address participant_) external view returns (bool)
+    {
+        return _participants[participant_].maxed;
+    }
+
 
     /**
      * Claim precheck.

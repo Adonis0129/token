@@ -4,9 +4,8 @@ pragma solidity ^0.8.4;
 import "./abstracts/BaseContract.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 // Interfaces.
-import "@openzeppelin/contracts/interfaces/IERC20.sol";
+import "./interfaces/IVault.sol";
 import "@uniswap/v2-core/contracts/interfaces/IUniswapV2Factory.sol";
-import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
 
 /**
  * @title Furio Token
@@ -25,88 +24,74 @@ contract Token is BaseContract, ERC20Upgradeable
     {
         __ERC20_init("Furio", "$FUR");
         __BaseContract_init();
-        _tax = 10;
-        _devTax = 10;
-        _vaultTax = 80;
+        _properties.tax = 1000;
+        _properties.devTax = 1000;
+        _properties.vaultTax = 8000;
+        _properties.pumpAndDumpTax = 5000;
+        _properties.pumpAndDumpRate = 2500;
+        _properties.sellCooldown = 300; // 5 Minutes on dev
+        //_properties.sellCooldown = 86400; // 24 Hour cooldown
     }
 
     /**
-     * Taxes.
+     * Properties struct.
      */
-    uint256 private _tax;               // Total tax rate.
-    uint256 private _devTax;            // Percent of tax collected for marketing/development.
-    uint256 private _vaultTax;          // Percent of tax collected that goes to the vault.
+    struct Properties {
+        uint256 tax;
+        uint256 devTax;
+        uint256 vaultTax;
+        uint256 pumpAndDumpTax;
+        uint256 pumpAndDumpRate;
+        uint256 sellCooldown;
+    }
+    Properties private _properties;
 
     /**
-     * Events.
+     * Sell timestamps.
      */
-    event TaxUpdated(uint256 tax_);
-    event DevTaxUpdated(uint256 devTax_);
-    event VaultTaxUpdated(uint256 vaultTax_);
-    event DevAddressUpdated(address devAddress_);
-    event VaultAddressUpdated(address vaultAddress_);
-    event TaxesPayed(address spender_, uint256 tax_);
+    mapping(address => uint256) private _lastSale;
 
     /**
-     * -------------------------------------------------------------------------
-     * USER FUNCTIONS.
-     * -------------------------------------------------------------------------
+     * Event.
      */
+    event Sell(address seller_, uint256 sellAmount_);
+    event PumpAndDump(address seller_, uint256 sellAmount_, uint256 vaultBalance_);
 
     /**
-     * Version.
-     * @return uint256
-     * @dev Returns the current contract version.
+     * Get prooperties.
+     * @return Properties Contract properties.
      */
-    function version() external pure returns (uint256)
+    function getProperties() external view returns (Properties memory)
     {
-        return 1;
+        return _properties;
     }
 
     /**
-     * Tax.
-     * @return uint256
-     * @dev Returns the default tax rate.
+     * Override transfer for taxes.
+     * @param to_ To address.
+     * @param amount_ Amount to transfer.
+     * @return bool True if successful.
      */
-    function tax() external view returns (uint256)
+    function transfer(address to_, uint256 amount_) public override returns (bool) {
+        uint256 _adjustedAmount_ = _takeTaxes(msg.sender, to_, amount_);
+        super._transfer(msg.sender, to_, _adjustedAmount_);
+        return true;
+    }
+
+    /**
+     * Override transferFrom for taxes.
+     * @param from_ From address.
+     * @param to_ To address.
+     * @param amount_ Amount to transfer.
+     * @return bool True if successful.
+     */
+    function transferFrom(address from_, address to_, uint256 amount_) public override returns (bool)
     {
-        return _tax;
+        super._spendAllowance(from_, msg.sender, amount_);
+        uint256 _adjustedAmount_ = _takeTaxes(from_, to_, amount_);
+        super._transfer(from_, to_, _adjustedAmount_);
+        return true;
     }
-
-    /**
-     * Burn tax.
-     * @return uint256
-     * @dev Returns the burn tax rate.
-     */
-    function burnTax() external view returns (uint256)
-    {
-        return 100 - (_devTax + _vaultTax);
-    }
-
-    /**
-     * Dev tax.
-     * @return uint256
-     * @dev Returns the marketing/development tax rate.
-     */
-    function devTax() external view returns (uint256)
-    {
-        return _devTax;
-    }
-
-    /**
-     * Vault tax.
-     * @return uint256
-     * @dev Returns the vault tax rate.
-     */
-    function vaultTax() external view returns (uint256)
-    {
-        return _vaultTax;
-    }
-
-    /**
-     * Vault transfer.
-     *
-     */
 
     /**
      * -------------------------------------------------------------------------
@@ -115,33 +100,63 @@ contract Token is BaseContract, ERC20Upgradeable
      */
 
     /**
-     * Transfer.
+     * Take taxes.
+     * @param from_ From address.
+     * @param to_ To address.
+     * @param amount_ Amount of the transfer.
+     * @return uint256 Amount after taxes have been removed.
      */
-    //function _transfer(address from_, address to_, uint256 amount_) internal override
-    //{
-        //address _safe_ = addressBook.get("safe");
-        //address _vault_ = addressBook.get("vault");
-        //// Get total tax amount
-        //uint256 _taxAmount_ = amount_ * _tax / 100;
-        //amount_ -= _taxAmount_;
-        //// Calculate tax spend
-        //uint256 _devAmount_ = _taxAmount_ * _devTax / 100;
-        //uint256 _vaultAmount_ = _taxAmount_ * _vaultTax / 100;
-        //uint256 _burnAmount_ = _taxAmount_ - (_devAmount_ + _vaultAmount_);
-        //// Burn!
-        ////super._burn(from_, _burnAmount_);
-        //// Spend taxes
-        //super._transfer(from_, _safe_, _devAmount_);
-        //super._transfer(from_, _vault_, _vaultAmount_);
-        //// Transfer tokens
-        //super._transfer(from_, to_, amount_);
-    //}
-
-    /**
-     * -------------------------------------------------------------------------
-     * MODIFIERS.
-     * -------------------------------------------------------------------------
-     */
+    function _takeTaxes(address from_, address to_, uint256 amount_) internal returns (uint256)
+    {
+        address _safe_ = addressBook.get("safe");
+        address _vault_ = addressBook.get("vault");
+        address _swap_ = addressBook.get("swap");
+        address _pool_ = addressBook.get("pool");
+        address _pair_ = IUniswapV2Factory(addressBook.get("factory")).getPair(addressBook.get("payment"), address(this));
+        bool _sell_ = false;
+        if(from_ == _pair_ && to_ == _swap_) {
+            // NO TAX
+            return amount_;
+        }
+        if(from_ == _swap_ && to_ != _pair_) {
+            // NO TAX
+            return amount_;
+        }
+        if(to_ == _pool_ || from_ == _pool_) {
+            return amount_;
+        }
+        if((from_ != _pair_ && to_ == _swap_) || (from_ != _swap_ && to_ == _pair_)) {
+            // IT'S A SELL!
+            _sell_ = true;
+            require(block.timestamp - _properties.sellCooldown >= _lastSale[from_], "Sell cooldown period is in effect");
+            _lastSale[from_] = block.timestamp;
+        }
+        uint256 _pndTax_ = 0;
+        if(_sell_) {
+            IVault _vaultContract_ = IVault(_vault_);
+            uint256 _balance_ = _vaultContract_.participantBalance(from_);
+            uint256 _maximum_ = _balance_ * _properties.pumpAndDumpRate / 10000;
+            if(amount_ > _maximum_ && !_vaultContract_.participantMaxed(from_)) {
+                _pndTax_ = _properties.pumpAndDumpTax;
+                emit PumpAndDump(from_, amount_, _balance_);
+            }
+            emit Sell(from_, amount_);
+        }
+        uint256 _taxAmount_ = amount_ * (_properties.tax + _pndTax_) / 10000;
+        uint256 _devTaxAmount_ = _taxAmount_ * _properties.devTax / 10000;
+        uint256 _vaultTaxAmount_ = _taxAmount_ * _properties.vaultTax / 10000;
+        uint256 _burnTaxAmount_ = _taxAmount_ - _devTaxAmount_ - _vaultTaxAmount_;
+        if(_devTaxAmount_ > 0) {
+            super._transfer(from_, _safe_, _devTaxAmount_);
+        }
+        if(_vaultTaxAmount_ > 0) {
+            super._transfer(from_, _vault_, _vaultTaxAmount_);
+        }
+        if(_burnTaxAmount_ > 0) {
+            super._burn(from_, _burnTaxAmount_);
+        }
+        return amount_ - _taxAmount_;
+    }
 
     /**
      * -------------------------------------------------------------------------
@@ -160,8 +175,7 @@ contract Token is BaseContract, ERC20Upgradeable
      */
     function setTax(uint256 tax_) external onlyOwner
     {
-        _tax = tax_;
-        emit TaxUpdated(tax_);
+        _properties.tax = tax_;
     }
 
     /**
@@ -171,9 +185,8 @@ contract Token is BaseContract, ERC20Upgradeable
      */
     function setDevTax(uint256 devTax_) external onlyOwner
     {
-        require(devTax_ + _vaultTax <= 100, "Invalid amount");
-        _devTax = devTax_;
-        emit DevTaxUpdated(devTax_);
+        require(devTax_ + _properties.vaultTax <= 10000, "Invalid amount");
+        _properties.devTax = devTax_;
     }
 
     /**
@@ -183,9 +196,38 @@ contract Token is BaseContract, ERC20Upgradeable
      */
     function setVaultTax(uint256 vaultTax_) external onlyOwner
     {
-        require(vaultTax_ + _devTax <= 100, "Invalid amount");
-        _vaultTax = vaultTax_;
-        emit VaultTaxUpdated(vaultTax_);
+        require(vaultTax_ + _properties.devTax <= 10000, "Invalid amount");
+        _properties.vaultTax = vaultTax_;
+    }
+
+    /**
+     * Set pump and dump tax.
+     * @param pumpAndDumpTax_ New vault tax rate.
+     * @dev Sets the pump and dump tax rate.
+     */
+    function setPumpAndDumpTax(uint256 pumpAndDumpTax_) external onlyOwner
+    {
+        _properties.pumpAndDumpTax = pumpAndDumpTax_;
+    }
+
+    /**
+     * Set pump and dump rate.
+     * @param pumpAndDumpRate_ New vault Rate rate.
+     * @dev Sets the pump and dump Rate rate.
+     */
+    function setPumpAndDumpRate(uint256 pumpAndDumpRate_) external onlyOwner
+    {
+        _properties.pumpAndDumpRate = pumpAndDumpRate_;
+    }
+
+    /**
+     * Set sell cooldown period.
+     * @param sellCooldown_ New cooldown rate.
+     * @dev Sets the cooldown rate.
+     */
+    function setSellCooldown(uint256 sellCooldown_) external onlyOwner
+    {
+        _properties.sellCooldown = sellCooldown_;
     }
 
     /**
@@ -202,7 +244,13 @@ contract Token is BaseContract, ERC20Upgradeable
         whenNotPaused
         override
     {
-        super._beforeTokenTransfer(from, to, amount);
+    }
+
+    function _afterTokenTransfer(address from, address to, uint256 amount)
+        internal
+        whenNotPaused
+        override
+    {
     }
 
     /**
@@ -235,4 +283,10 @@ contract Token is BaseContract, ERC20Upgradeable
         }
         return false;
     }
+
+    /**
+     * -------------------------------------------------------------------------
+     * HELPERS.
+     * -------------------------------------------------------------------------
+     */
 }

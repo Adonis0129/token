@@ -3,6 +3,7 @@ pragma solidity ^0.8.4;
 
 import "./abstracts/BaseContract.sol";
 // INTERFACES
+import "./interfaces/IVault.sol";
 import "@openzeppelin/contracts/interfaces/IERC20.sol";
 import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
 
@@ -36,7 +37,49 @@ contract Swap is BaseContract
         require(address(_in_) != address(0), "Payment not set");
         IERC20 _out_ = IERC20(addressBook.get("token"));
         require(address(_out_) != address(0), "Token not set");
-        return(_swap(_in_, _out_, paymentAmount_));
+        _swap(_in_, _out_, paymentAmount_, msg.sender, msg.sender);
+        return true;
+    }
+
+    /**
+     * Deposit buy.
+     * @param paymentAmount_ Amount of payment.
+     * @return bool True if successful.
+     */
+    function depositBuy(uint256 paymentAmount_) external whenNotPaused returns (bool)
+    {
+        return _depositBuy(paymentAmount_, address(0));
+    }
+
+    /**
+     * Deposit buy with referrer.
+     * @param paymentAmount_ Amount of payment.
+     * @param referrer_ Address of referrer.
+     * @return bool True if successful.
+     */
+    function depositBuy(uint256 paymentAmount_, address referrer_) external whenNotPaused returns (bool)
+    {
+        return _depositBuy(paymentAmount_, referrer_);
+    }
+
+    /**
+     * Internal deposit buy.
+     * @param paymentAmount_ Amount of payment.
+     * @param referrer_ Address of referrer.
+     * @return bool True if successful.
+     */
+    function _depositBuy(uint256 paymentAmount_, address referrer_) internal returns (bool)
+    {
+        require(paymentAmount_ > 0, "Invalid amount");
+        IERC20 _in_ = IERC20(addressBook.get("payment"));
+        require(address(_in_) != address(0), "Payment not set");
+        IERC20 _out_ = IERC20(addressBook.get("token"));
+        require(address(_out_) != address(0), "Token not set");
+        IVault _vault_ = IVault(addressBook.get("vault"));
+        require(address(_vault_) != address(0), "Vault not set");
+        uint256 _amount_ = _swap(_in_, _out_, paymentAmount_, msg.sender, address(_vault_));
+        _vault_.depositFor(msg.sender, _amount_, referrer_);
+        return true;
     }
 
     /**
@@ -51,7 +94,8 @@ contract Swap is BaseContract
         require(address(_in_) != address(0), "Token not set");
         IERC20 _out_ = IERC20(addressBook.get("payment"));
         require(address(_out_) != address(0), "Payment not set");
-        return(_swap(_in_, _out_, sellAmount_));
+        _swap(_in_, _out_, sellAmount_, msg.sender, msg.sender);
+        return true;
     }
 
     /**
@@ -81,13 +125,14 @@ contract Swap is BaseContract
      * @param in_ In token.
      * @param out_ Out token.
      * @param amount_ Amount in.
-     * @return bool True if successful
+     * @param receiver_ Receiver's address.
+     * @return uint256 Output amount.
      */
-    function _swap(IERC20 in_, IERC20 out_, uint256 amount_) internal returns (bool)
+    function _swap(IERC20 in_, IERC20 out_, uint256 amount_, address payer_, address receiver_) internal returns (uint256)
     {
         IUniswapV2Router02 _router_ = IUniswapV2Router02(addressBook.get("router"));
         require(address(_router_) != address(0), "Router not set");
-        require(in_.transferFrom(msg.sender, address(this), amount_), "In transfer failed");
+        require(in_.transferFrom(payer_, address(this), amount_), "In transfer failed");
         address[] memory _path_ = new address[](2);
         _path_[0] = address(in_);
         _path_[1] = address(out_);
@@ -101,7 +146,8 @@ contract Swap is BaseContract
         );
         uint256 _balance_ = out_.balanceOf(address(this));
         out_.approve(address(this), _balance_);
-        return out_.transfer(msg.sender, _balance_);
+        require(out_.transfer(receiver_, _balance_), "Out transfer failed");
+        return _balance_;
     }
 
     /**

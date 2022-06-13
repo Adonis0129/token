@@ -26,8 +26,8 @@ contract Downline is BaseContract, ERC721Upgradeable
     {
         __ERC721_init("Furio Downline NFT", "$FURDL");
         __BaseContract_init();
-        _properties.buyPrice = 5e16; // 5 $FUR.
-        _properties.sellPrice = 4e16; // 4 $FUR.
+        _properties.buyPrice = 5e18; // 5 $FUR.
+        _properties.sellPrice = 4e18; // 4 $FUR.
         _properties.maxPerUser = 15; // 15 NFTs max per user.
         createGeneration(10000, 'ipfs://QmPmvwSarTWNBYAcXhbGUCUUkGsiD7hXx8qpk49YwCAGcU/');
     }
@@ -138,9 +138,13 @@ contract Downline is BaseContract, ERC721Upgradeable
         require(address(_token_) != address(0), "Token not set");
         require(balanceOf(msg.sender) >= quantity_, "Quantity is too high");
         uint256 _refund_ = 0;
+        uint256[] memory _tokens_ = new uint256[](quantity_);
         for(uint256 i = 0; i < quantity_; i ++) {
             _refund_ += _properties.sellPrice;
-            super._burn(tokenOfOwnerByIndex(msg.sender, i));
+            _tokens_[i] = tokenOfOwnerByIndex(msg.sender, i);
+        }
+        for(uint256 i = 0; i < _tokens_.length; i ++) {
+            super._burn(_tokens_[i]);
         }
         uint256 _balance_ = _token_.balanceOf(address(this));
         if(_balance_ < _refund_) {
