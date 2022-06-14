@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.4;
+pragma solidity ^0.8.9;
 
 import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/math/SafeMathUpgradeable.sol";
 
-contract PistonToken is Initializable, ERC20Upgradeable, OwnableUpgradeable {
+contract FurioToken is Initializable, ERC20Upgradeable, OwnableUpgradeable {
 	using SafeMathUpgradeable for uint256;
 
 	bool public swapEnabled;

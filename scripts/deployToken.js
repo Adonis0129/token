@@ -13,13 +13,6 @@ async function main() {
     await token.setAddressBook(addressBook);
     await addressbook.set('token', token.address);
     console.log("Token proxy deployed to:", token.address);
-    // deploy pool
-    const Pool = await ethers.getContractFactory("Pool");
-    const pool = await upgrades.deployProxy(Pool);
-    await pool.deployed();
-    await pool.setAddressBook(addressBook);
-    await addressbook.set('pool', pool.address);
-    console.log("Pool proxy deployed to:", pool.address);
 }
 
 main()

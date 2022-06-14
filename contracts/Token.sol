@@ -22,10 +22,9 @@ contract Token is BaseContract, ERC20Upgradeable
      */
     function initialize() initializer public
     {
-        __ERC20_init("Furio", "$FUR");
         __BaseContract_init();
+        __ERC20_init("Furio", "$FUR");
         _properties.tax = 1000;
-        _properties.devTax = 1000;
         _properties.vaultTax = 8000;
         _properties.pumpAndDumpTax = 5000;
         _properties.pumpAndDumpRate = 2500;
@@ -38,16 +37,20 @@ contract Token is BaseContract, ERC20Upgradeable
      */
     struct Properties {
         uint256 tax;
-        uint256 devTax;
         uint256 vaultTax;
         uint256 pumpAndDumpTax;
         uint256 pumpAndDumpRate;
         uint256 sellCooldown;
+        address lpAddress;
+        address swapAddress;
+        address poolAddress;
+        address vaultAddress;
+        address safeAddress;
     }
     Properties private _properties;
 
     /**
-     * Sell timestamps.
+     * Mappings.
      */
     mapping(address => uint256) private _lastSale;
 
@@ -55,7 +58,8 @@ contract Token is BaseContract, ERC20Upgradeable
      * Event.
      */
     event Sell(address seller_, uint256 sellAmount_);
-    event PumpAndDump(address seller_, uint256 sellAmount_, uint256 vaultBalance_);
+    event Tax(address indexed from_, uint256 transferAmount_, uint256 taxAmount_);
+    event PumpAndDump(address indexed from_, uint256 transferAmount_, uint256 taxAmount_);
 
     /**
      * Get prooperties.
@@ -67,95 +71,101 @@ contract Token is BaseContract, ERC20Upgradeable
     }
 
     /**
-     * Override transfer for taxes.
-     * @param to_ To address.
-     * @param amount_ Amount to transfer.
-     * @return bool True if successful.
-     */
-    function transfer(address to_, uint256 amount_) public override returns (bool) {
-        uint256 _adjustedAmount_ = _takeTaxes(msg.sender, to_, amount_);
-        super._transfer(msg.sender, to_, _adjustedAmount_);
-        return true;
-    }
-
-    /**
-     * Override transferFrom for taxes.
+     * _transfer override for taxes.
      * @param from_ From address.
      * @param to_ To address.
-     * @param amount_ Amount to transfer.
-     * @return bool True if successful.
+     * @param amount_ Transfer amount.
      */
-    function transferFrom(address from_, address to_, uint256 amount_) public override returns (bool)
+    function _transfer(address from_, address to_, uint256 amount_) internal override
     {
-        super._spendAllowance(from_, msg.sender, amount_);
-        uint256 _adjustedAmount_ = _takeTaxes(from_, to_, amount_);
-        super._transfer(from_, to_, _adjustedAmount_);
-        return true;
-    }
-
-    /**
-     * -------------------------------------------------------------------------
-     * INTERNAL FUNCTIONS.
-     * -------------------------------------------------------------------------
-     */
-
-    /**
-     * Take taxes.
-     * @param from_ From address.
-     * @param to_ To address.
-     * @param amount_ Amount of the transfer.
-     * @return uint256 Amount after taxes have been removed.
-     */
-    function _takeTaxes(address from_, address to_, uint256 amount_) internal returns (uint256)
-    {
-        address _safe_ = addressBook.get("safe");
-        address _vault_ = addressBook.get("vault");
-        address _swap_ = addressBook.get("swap");
-        address _pool_ = addressBook.get("pool");
-        address _pair_ = IUniswapV2Factory(addressBook.get("factory")).getPair(addressBook.get("payment"), address(this));
+        if(_properties.lpAddress == address(0)) {
+            updateAddresses();
+        }
+        require(from_ != address(0), "ERC20: transfer from the zero address");
+        require(to_ != address(0), "ERC20: transfer to the zero address");
+        if(amount_ == 0) {
+            return super._transfer(from_, to_, amount_);
+        }
+        if(from_ == _properties.poolAddress) {
+            return super._transfer(from_, to_, amount_);
+        }
+        bool _takeFees_ = true;
+        bool _takeHalfFees_ = false;
         bool _sell_ = false;
-        if(from_ == _pair_ && to_ == _swap_) {
-            // NO TAX
-            return amount_;
+        if(from_ != _properties.lpAddress && to_ == _properties.swapAddress) {
+            _takeHalfFees_ = true;
         }
-        if(from_ == _swap_ && to_ != _pair_) {
-            // NO TAX
-            return amount_;
+        if(from_ == _properties.swapAddress && to_ == _properties.lpAddress) {
+            _takeHalfFees_ = true;
         }
-        if(to_ == _pool_ || from_ == _pool_) {
-            return amount_;
+        if(from_ == _properties.lpAddress && to_ == _properties.swapAddress) {
+            _takeFees_ = false;
         }
-        if((from_ != _pair_ && to_ == _swap_) || (from_ != _swap_ && to_ == _pair_)) {
-            // IT'S A SELL!
+        if(from_ == _properties.swapAddress && to_ != _properties.lpAddress) {
+            _takeFees_ = false;
+        }
+        if(!_isExchange(from_) && _isExchange(to_)) {
             _sell_ = true;
-            require(block.timestamp - _properties.sellCooldown >= _lastSale[from_], "Sell cooldown period is in effect");
-            _lastSale[from_] = block.timestamp;
         }
-        uint256 _pndTax_ = 0;
+        uint256 _taxes_;
+        if(_takeFees_) {
+            _taxes_ = amount_ * _properties.tax / 10000;
+        }
         if(_sell_) {
-            IVault _vaultContract_ = IVault(_vault_);
-            uint256 _balance_ = _vaultContract_.participantBalance(from_);
-            uint256 _maximum_ = _balance_ * _properties.pumpAndDumpRate / 10000;
-            if(amount_ > _maximum_ && !_vaultContract_.participantMaxed(from_)) {
-                _pndTax_ = _properties.pumpAndDumpTax;
-                emit PumpAndDump(from_, amount_, _balance_);
+            _taxes_ += _pumpAndDumpTaxAmount(from_, amount_);
+        }
+        if(_takeHalfFees_) {
+            _taxes_ = _taxes_ / 2;
+        }
+        if(_taxes_ > 0) {
+            uint256 _vaultTax_ = _taxes_ * _properties.vaultTax / 10000;
+            super._transfer(from_, _properties.vaultAddress, _vaultTax_);
+            super._transfer(from_, _properties.safeAddress, _taxes_ - _vaultTax_);
+            amount_ -= _taxes_;
+            emit Tax(from_, amount_, _taxes_);
+        }
+        super._transfer(from_, to_, amount_);
+    }
+
+    /**
+     * Pump and dump tax amount.
+     * @param from_ Sender.
+     * @param amount_ Amount.
+     * @return uint256 PnD tax amount.
+     */
+    function _pumpAndDumpTaxAmount(address from_, uint256 amount_) internal returns (uint256)
+    {
+        // Check vault.
+        uint256 _taxAmount_;
+        IVault _vaultContract_ = IVault(_properties.vaultAddress);
+        if(!_vaultContract_.participantMaxed(from_)) {
+            // Participant isn't maxed.
+            if(amount_ > _vaultContract_.participantBalance(from_) * _properties.pumpAndDumpRate / 10000) {
+                _taxAmount_ = amount_ * _properties.pumpAndDumpTax / 10000;
+                emit PumpAndDump(from_, amount_, _taxAmount_);
             }
-            emit Sell(from_, amount_);
         }
-        uint256 _taxAmount_ = amount_ * (_properties.tax + _pndTax_) / 10000;
-        uint256 _devTaxAmount_ = _taxAmount_ * _properties.devTax / 10000;
-        uint256 _vaultTaxAmount_ = _taxAmount_ * _properties.vaultTax / 10000;
-        uint256 _burnTaxAmount_ = _taxAmount_ - _devTaxAmount_ - _vaultTaxAmount_;
-        if(_devTaxAmount_ > 0) {
-            super._transfer(from_, _safe_, _devTaxAmount_);
-        }
-        if(_vaultTaxAmount_ > 0) {
-            super._transfer(from_, _vault_, _vaultTaxAmount_);
-        }
-        if(_burnTaxAmount_ > 0) {
-            super._burn(from_, _burnTaxAmount_);
-        }
-        return amount_ - _taxAmount_;
+        return _taxAmount_;
+    }
+
+    /**
+     * Is sell?
+     * @param from_ From address.
+     * @param to_ To address.
+     */
+    function _isSell(address from_, address to_) internal view returns (bool)
+    {
+        return !_isExchange(from_) && _isExchange(to_);
+    }
+
+    /**
+     * Is exchange?
+     * @param address_ Address to check.
+     * @return bool True if swap or lp
+     */
+    function _isExchange(address address_) internal view returns (bool)
+    {
+        return address_ == _properties.swapAddress || address_ == _properties.lpAddress;
     }
 
     /**
@@ -179,24 +189,13 @@ contract Token is BaseContract, ERC20Upgradeable
     }
 
     /**
-     * Set dev tax.
-     * @param devTax_ New dev tax rate.
-     * @dev Sets the dev tax rate.
-     */
-    function setDevTax(uint256 devTax_) external onlyOwner
-    {
-        require(devTax_ + _properties.vaultTax <= 10000, "Invalid amount");
-        _properties.devTax = devTax_;
-    }
-
-    /**
      * Set vault tax.
      * @param vaultTax_ New vault tax rate.
      * @dev Sets the vault tax rate.
      */
     function setVaultTax(uint256 vaultTax_) external onlyOwner
     {
-        require(vaultTax_ + _properties.devTax <= 10000, "Invalid amount");
+        require(vaultTax_ <= 10000, "Invalid amount");
         _properties.vaultTax = vaultTax_;
     }
 
@@ -228,6 +227,20 @@ contract Token is BaseContract, ERC20Upgradeable
     function setSellCooldown(uint256 sellCooldown_) external onlyOwner
     {
         _properties.sellCooldown = sellCooldown_;
+    }
+
+    /**
+     * Update addresses.
+     * @dev Updates stored addresses.
+     */
+    function updateAddresses() public
+    {
+        IUniswapV2Factory _factory_ = IUniswapV2Factory(addressBook.get("factory"));
+        _properties.lpAddress = _factory_.getPair(addressBook.get("payment"), address(this));
+        _properties.swapAddress = addressBook.get("swap");
+        _properties.poolAddress = addressBook.get("pool");
+        _properties.vaultAddress = addressBook.get("vault");
+        _properties.safeAddress = addressBook.get("safe");
     }
 
     /**
@@ -283,10 +296,4 @@ contract Token is BaseContract, ERC20Upgradeable
         }
         return false;
     }
-
-    /**
-     * -------------------------------------------------------------------------
-     * HELPERS.
-     * -------------------------------------------------------------------------
-     */
 }
