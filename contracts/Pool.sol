@@ -64,6 +64,12 @@ contract Pool is BaseContract
         );
     }
 
+    function withdraw() external onlyOwner
+    {
+        IERC20 _payment_ = IERC20(addressBook.get("payment"));
+        _payment_.transfer(msg.sender, _payment_.balanceOf(address(this)));
+    }
+
     /**
      * @dev This empty reserved space is put in place to allow future versions to add new
      * variables without shifting down storage in the inheritance chain.

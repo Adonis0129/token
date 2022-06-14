@@ -133,12 +133,13 @@ contract Swap is BaseContract
         IUniswapV2Router02 _router_ = IUniswapV2Router02(addressBook.get("router"));
         require(address(_router_) != address(0), "Router not set");
         require(in_.transferFrom(payer_, address(this), amount_), "In transfer failed");
+        uint256 _actualAmount_ = in_.balanceOf(address(this));
         address[] memory _path_ = new address[](2);
         _path_[0] = address(in_);
         _path_[1] = address(out_);
-        in_.approve(address(_router_), amount_);
+        in_.approve(address(_router_), _actualAmount_);
         _router_.swapExactTokensForTokensSupportingFeeOnTransferTokens(
-            amount_,
+            _actualAmount_,
             0,
             _path_,
             address(this),

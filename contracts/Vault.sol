@@ -25,8 +25,8 @@ contract Vault is BaseContract
     function initialize() initializer public
     {
         __BaseContract_init();
-        _properties.period = 3600; // DEV period is 1 minute.
-        //period = 86400 // PRODUCTION period is 24 hours.
+        //_properties.period = 3600; // DEV period is 1 minute.
+        _properties.period = 86400; // PRODUCTION period is 24 hours.
         _properties.lookbackPeriods = 28; // 28 periods.
         _properties.penaltyLookbackPeriods = 7; // 7 periods.
         _properties.maxPayout = 100000 * (10 ** 18);

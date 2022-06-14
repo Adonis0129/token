@@ -28,8 +28,8 @@ contract Token is BaseContract, ERC20Upgradeable
         _properties.vaultTax = 8000;
         _properties.pumpAndDumpTax = 5000;
         _properties.pumpAndDumpRate = 2500;
-        _properties.sellCooldown = 300; // 5 Minutes on dev
-        //_properties.sellCooldown = 86400; // 24 Hour cooldown
+        //_properties.sellCooldown = 300; // 5 Minutes on dev
+        _properties.sellCooldown = 86400; // 24 Hour cooldown
     }
 
     /**
@@ -71,6 +71,26 @@ contract Token is BaseContract, ERC20Upgradeable
     }
 
     /**
+     * Get last sell.
+     * @param address_ Address of seller.
+     * @return uint256 Last sale timestamp.
+     */
+    function getLastSell(address address_) external view returns (uint256)
+    {
+        return _lastSale[address_];
+    }
+
+    /**
+     * is on cooldown?
+     * @param address_ Address of seller.
+     * @return bool True if on cooldown.
+     */
+    function onCooldown(address address_) public view returns (bool)
+    {
+        return _lastSale[address_] >= block.timestamp - _properties.sellCooldown;
+    }
+
+    /**
      * _transfer override for taxes.
      * @param from_ From address.
      * @param to_ To address.
@@ -81,49 +101,41 @@ contract Token is BaseContract, ERC20Upgradeable
         if(_properties.lpAddress == address(0)) {
             updateAddresses();
         }
-        require(from_ != address(0), "ERC20: transfer from the zero address");
-        require(to_ != address(0), "ERC20: transfer to the zero address");
         if(amount_ == 0) {
+            // No tax on zero amount transactions.
             return super._transfer(from_, to_, amount_);
         }
         if(from_ == _properties.poolAddress) {
+            // No tax on transfers from pool.
             return super._transfer(from_, to_, amount_);
         }
-        bool _takeFees_ = true;
-        bool _takeHalfFees_ = false;
-        bool _sell_ = false;
-        if(from_ != _properties.lpAddress && to_ == _properties.swapAddress) {
-            _takeHalfFees_ = true;
-        }
-        if(from_ == _properties.swapAddress && to_ == _properties.lpAddress) {
-            _takeHalfFees_ = true;
+        if(from_ == _properties.swapAddress) {
+            // No tax on transfers from swap.
+            return super._transfer(from_, to_, amount_);
         }
         if(from_ == _properties.lpAddress && to_ == _properties.swapAddress) {
-            _takeFees_ = false;
+            // No tax on transfers from LP to swap.
+            return super._transfer(from_, to_, amount_);
         }
-        if(from_ == _properties.swapAddress && to_ != _properties.lpAddress) {
-            _takeFees_ = false;
+        if(to_ == _properties.vaultAddress) {
+            // No tax on transfers directly to vault. (e.g. airdrops because they're taxed by the vault)
+            return super._transfer(from_, to_, amount_);
         }
+        bool _sell_ = false;
         if(!_isExchange(from_) && _isExchange(to_)) {
             _sell_ = true;
         }
-        uint256 _taxes_;
-        if(_takeFees_) {
-            _taxes_ = amount_ * _properties.tax / 10000;
-        }
+        uint256 _taxes_ = amount_ * _properties.tax / 10000;
         if(_sell_) {
+            require(!onCooldown(from_), "Sell cooldown in effect");
+            _lastSale[from_] = block.timestamp;
             _taxes_ += _pumpAndDumpTaxAmount(from_, amount_);
         }
-        if(_takeHalfFees_) {
-            _taxes_ = _taxes_ / 2;
-        }
-        if(_taxes_ > 0) {
-            uint256 _vaultTax_ = _taxes_ * _properties.vaultTax / 10000;
-            super._transfer(from_, _properties.vaultAddress, _vaultTax_);
-            super._transfer(from_, _properties.safeAddress, _taxes_ - _vaultTax_);
-            amount_ -= _taxes_;
-            emit Tax(from_, amount_, _taxes_);
-        }
+        uint256 _vaultTax_ = _taxes_ * _properties.vaultTax / 10000;
+        super._transfer(from_, _properties.vaultAddress, _vaultTax_);
+        super._transfer(from_, _properties.safeAddress, _taxes_ - _vaultTax_);
+        amount_ -= _taxes_;
+        emit Tax(from_, amount_, _taxes_);
         super._transfer(from_, to_, amount_);
     }
 
