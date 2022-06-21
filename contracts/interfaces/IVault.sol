@@ -37,6 +37,7 @@ interface IVault {
     function updatePenaltyLookbackPeriods ( uint256 penaltyLookbackPeriods_ ) external;
     function updatePeriod ( uint256 period_ ) external;
     function updateRate ( uint256 claims_, uint256 rate_ ) external;
+    function updateReferrer ( address referrer_ ) external;
     function upgradeTo ( address newImplementation ) external;
     function upgradeToAndCall ( address newImplementation, bytes memory data ) external;
 }

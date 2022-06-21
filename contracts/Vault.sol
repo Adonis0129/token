@@ -651,7 +651,7 @@ contract Vault is BaseContract
      */
     function _addReferrer(address referred_, address referrer_) internal
     {
-        if(_participants[referred_].referrer != address(0)) {
+        if(_participants[referred_].referrer != address(0) && _participants[referred_].referrer != addressBook.get("safe")) {
             // Only update referrer if none is set yet
             return;
         }
@@ -760,6 +760,30 @@ contract Vault is BaseContract
     function getReferrals(address participant_) external view returns (address[] memory)
     {
         return _referrals[participant_];
+    }
+
+    /**
+     * @param referrer_ New referrer address.
+     * @dev A user can update their referrer IF... their current referrer
+     *      is the dev wallet AND they don't have any direct referrals.
+     */
+    function updateReferrer(address referrer_) external
+    {
+        // Get safe address.
+        address _safe_ = addressBook.get("safe");
+        require(referrer_ != _safe_, "Invalid referrer");
+        require(_participants[msg.sender].referrer == _safe_, "You cannot change your referrer");
+        require(_participants[msg.sender].directReferrals == 0, "You cannot change your referrer");
+        // Remove referrer from dev wallet
+        for(uint i = 0; i < _referrals[_safe_].length; i ++) {
+            if(_referrals[_safe_][i] == msg.sender) {
+                delete _referrals[_safe_][i];
+                _participants[_safe_].directReferrals --;
+                break;
+            }
+        }
+        // Add new referrer.
+        _addReferrer(msg.sender, referrer_);
     }
 
     /**

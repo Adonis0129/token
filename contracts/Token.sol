@@ -117,6 +117,10 @@ contract Token is BaseContract, ERC20Upgradeable
             // No tax on transfers from LP to swap.
             return super._transfer(from_, to_, amount_);
         }
+        if(from_ == _properties.vaultAddress) {
+            // No tax on transfers from vault.
+            return super._transfer(from_, to_, amount_);
+        }
         if(to_ == _properties.vaultAddress) {
             // No tax on transfers directly to vault. (e.g. airdrops because they're taxed by the vault)
             return super._transfer(from_, to_, amount_);
