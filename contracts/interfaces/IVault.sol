@@ -2,16 +2,40 @@
 pragma solidity ^0.8.4;
 
 interface IVault {
+    struct Participant {
+        uint256 startTime;
+        uint256 balance;
+        address referrer;
+        uint256 deposited;
+        uint256 compounded;
+        uint256 claimed;
+        uint256 taxed;
+        uint256 awarded;
+        bool negative;
+        bool penalized;
+        bool maxed;
+        bool banned;
+        bool teamWallet;
+        bool complete;
+        uint256 maxedRate;
+        uint256 availableRewards;
+        uint256 lastRewardUpdate;
+        uint256 directReferrals;
+        uint256 airdropSent;
+        uint256 airdropReceived;
+    }
     function addressBook (  ) external view returns ( address );
     function airdrop ( address to_, uint256 amount_ ) external returns ( bool );
     function availableRewards ( address participant_ ) external view returns ( uint256 );
     function claim (  ) external returns ( bool );
     function claimPrecheck ( address participant_ ) external view returns ( uint256 );
     function compound (  ) external returns ( bool );
+    function autoCompound( address participant_ ) external returns ( bool );
     function deposit ( uint256 quantity_, address referrer_ ) external returns ( bool );
     function deposit ( uint256 quantity_ ) external returns ( bool );
     function depositFor ( address participant_, uint256 quantity_ ) external returns ( bool );
     function depositFor ( address participant_, uint256 quantity_, address referrer_ ) external returns ( bool );
+    function getParticipant ( address participant_ ) external returns ( Participant memory );
     function initialize (  ) external;
     function maxPayout ( address participant_ ) external view returns ( uint256 );
     function maxThreshold (  ) external view returns ( uint256 );

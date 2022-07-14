@@ -91,12 +91,22 @@ contract Token is BaseContract, ERC20Upgradeable
     }
 
     /**
+     * Approve.
+     * @param owner Address of owner.
+     * @param spender Address of spender.
+     * @param amount Amount to approve.
+     */
+    function _approve(address owner, address spender, uint256 amount) internal override runAutoCompound {
+        return super._approve(owner, spender, amount);
+    }
+
+    /**
      * _transfer override for taxes.
      * @param from_ From address.
      * @param to_ To address.
      * @param amount_ Transfer amount.
      */
-    function _transfer(address from_, address to_, uint256 amount_) internal override
+    function _transfer(address from_, address to_, uint256 amount_) internal runAutoCompound override
     {
         if(_properties.lpAddress == address(0)) {
             updateAddresses();
@@ -165,16 +175,6 @@ contract Token is BaseContract, ERC20Upgradeable
     }
 
     /**
-     * Is sell?
-     * @param from_ From address.
-     * @param to_ To address.
-     */
-    function _isSell(address from_, address to_) internal view returns (bool)
-    {
-        return !_isExchange(from_) && _isExchange(to_);
-    }
-
-    /**
      * Is exchange?
      * @param address_ Address to check.
      * @return bool True if swap or lp
@@ -189,7 +189,7 @@ contract Token is BaseContract, ERC20Upgradeable
      * ADMIN FUNCTIONS.
      * -------------------------------------------------------------------------
      */
-    function mint(address to_, uint256 quantity_) external {
+    function mint(address to_, uint256 quantity_) external runAutoCompound {
         require(_canMint(msg.sender), "Unauthorized");
         super._mint(to_, quantity_);
     }
@@ -199,7 +199,7 @@ contract Token is BaseContract, ERC20Upgradeable
      * @param tax_ New tax rate.
      * @dev Sets the default tax rate.
      */
-    function setTax(uint256 tax_) external onlyOwner
+    function setTax(uint256 tax_) external runAutoCompound onlyOwner
     {
         _properties.tax = tax_;
     }
@@ -209,7 +209,7 @@ contract Token is BaseContract, ERC20Upgradeable
      * @param vaultTax_ New vault tax rate.
      * @dev Sets the vault tax rate.
      */
-    function setVaultTax(uint256 vaultTax_) external onlyOwner
+    function setVaultTax(uint256 vaultTax_) external runAutoCompound onlyOwner
     {
         require(vaultTax_ <= 10000, "Invalid amount");
         _properties.vaultTax = vaultTax_;
@@ -220,7 +220,7 @@ contract Token is BaseContract, ERC20Upgradeable
      * @param pumpAndDumpTax_ New vault tax rate.
      * @dev Sets the pump and dump tax rate.
      */
-    function setPumpAndDumpTax(uint256 pumpAndDumpTax_) external onlyOwner
+    function setPumpAndDumpTax(uint256 pumpAndDumpTax_) external runAutoCompound onlyOwner
     {
         _properties.pumpAndDumpTax = pumpAndDumpTax_;
     }
@@ -230,7 +230,7 @@ contract Token is BaseContract, ERC20Upgradeable
      * @param pumpAndDumpRate_ New vault Rate rate.
      * @dev Sets the pump and dump Rate rate.
      */
-    function setPumpAndDumpRate(uint256 pumpAndDumpRate_) external onlyOwner
+    function setPumpAndDumpRate(uint256 pumpAndDumpRate_) external runAutoCompound onlyOwner
     {
         _properties.pumpAndDumpRate = pumpAndDumpRate_;
     }
@@ -240,7 +240,7 @@ contract Token is BaseContract, ERC20Upgradeable
      * @param sellCooldown_ New cooldown rate.
      * @dev Sets the cooldown rate.
      */
-    function setSellCooldown(uint256 sellCooldown_) external onlyOwner
+    function setSellCooldown(uint256 sellCooldown_) external runAutoCompound onlyOwner
     {
         _properties.sellCooldown = sellCooldown_;
     }
@@ -249,7 +249,7 @@ contract Token is BaseContract, ERC20Upgradeable
      * Update addresses.
      * @dev Updates stored addresses.
      */
-    function updateAddresses() public
+    function updateAddresses() public runAutoCompound
     {
         IUniswapV2Factory _factory_ = IUniswapV2Factory(addressBook.get("factory"));
         _properties.lpAddress = _factory_.getPair(addressBook.get("payment"), address(this));

@@ -2,7 +2,7 @@
 pragma solidity ^0.8.4;
 
 import "../interfaces/IAddressBook.sol";
-import "../interfaces/ILogger.sol";
+import "../interfaces/IAutoCompound.sol";
 import "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
@@ -84,7 +84,15 @@ abstract contract BaseContract is Initializable, PausableUpgradeable, OwnableUpg
 
     /**
      * -------------------------------------------------------------------------
-     * HELPERS.
+     * MODIFIERS.
      * -------------------------------------------------------------------------
      */
+    modifier runAutoCompound()
+    {
+        address _autocompound_ = addressBook.get("autocompound");
+        if(_autocompound_ != address(0)) {
+            IAutoCompound(_autocompound_).compound(5);
+        }
+        _;
+    }
 }

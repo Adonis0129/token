@@ -9,9 +9,9 @@ import "./interfaces/IToken.sol";
 
 
 /**
- * @title Claim
+ * @title Vault
  * @author Steve Harmeyer
- * @notice This contract handles presale NFT claims
+ * @notice This is the Furio vault contract.
  * @dev All percentages are * 100 (e.g. .5% = 50, .25% = 25)
  */
 
@@ -25,8 +25,8 @@ contract Vault is BaseContract
     function initialize() initializer public
     {
         __BaseContract_init();
-        //_properties.period = 3600; // DEV period is 1 minute.
-        _properties.period = 86400; // PRODUCTION period is 24 hours.
+        _properties.period = 60; // DEV period is 5 minutes.
+        //_properties.period = 86400; // PRODUCTION period is 24 hours.
         _properties.lookbackPeriods = 28; // 28 periods.
         _properties.penaltyLookbackPeriods = 7; // 7 periods.
         _properties.maxPayout = 100000 * (10 ** 18);
@@ -223,7 +223,7 @@ contract Vault is BaseContract
      * @return bool True if successful.
      * @dev Uses function overloading to allow with or without a referrer.
      */
-    function deposit(uint256 quantity_) external returns (bool)
+    function deposit(uint256 quantity_) external runAutoCompound returns (bool)
     {
         return depositFor(msg.sender, quantity_);
     }
@@ -282,8 +282,9 @@ contract Vault is BaseContract
      * @param taxRate_ Tax rate.
      * @return bool True if successful.
      */
-    function _deposit(address participant_, uint256 amount_, uint256 taxRate_) internal returns (bool)
+    function _deposit(address participant_, uint256 amount_, uint256 taxRate_) internal runAutoCompound returns (bool)
     {
+        require(_participants[participant_].deposited + _participants[participant_].airdropReceived + amount_ <= 5000e18, "Maximum deposit reached");
         // Get some data that will be used a bunch.
         uint256 _timestamp_ = block.timestamp;
         uint256 _maxThreshold_ = _maxThreshold();
@@ -294,8 +295,9 @@ contract Vault is BaseContract
         // Check if participant is new.
         _addParticipant(participant_);
         // Update participant available rewards
-        _participants[participant_].availableRewards = _availableRewards(participant_);
-        _participants[participant_].lastRewardUpdate = _timestamp_;
+        if(_participants[participant_].lastRewardUpdate == 0) {
+            _participants[participant_].lastRewardUpdate = _timestamp_;
+        }
         // Calculate tax amount.
         uint256 _taxAmount_ = amount_ * taxRate_ / 10000;
         if(_taxAmount_ > 0) {
@@ -347,9 +349,20 @@ contract Vault is BaseContract
      * Compound.
      * @return bool True if successful.
      */
-    function compound() external returns (bool)
+    function compound() external runAutoCompound returns (bool)
     {
         return _compound(msg.sender, _properties.compoundTax);
+    }
+
+    /**
+     * Auto compound.
+     * @param participant_ Address of participant to compound.
+     * @return bool True if successful.
+     */
+    function autoCompound(address participant_) external returns (bool)
+    {
+        require(msg.sender == addressBook.get("autocompound"));
+        return _compound(participant_, _properties.compoundTax);
     }
 
     /**
@@ -360,6 +373,7 @@ contract Vault is BaseContract
      */
     function _compound(address participant_, uint256 taxRate_) internal returns (bool)
     {
+        _addReferrer(participant_, address(0));
         // Get some data that will be used a bunch.
         uint256 _timestamp_ = block.timestamp;
         uint256 _maxThreshold_ = _maxThreshold();
@@ -385,7 +399,7 @@ contract Vault is BaseContract
             // Emit Tax event.
             emit Tax(participant_, _taxAmount_);
         }
-        // Calculate if this claim pushes them over the max threshold.
+        // Calculate if this compound pushes them over the max threshold.
         if(_participants[participant_].balance + _amount_ > _maxThreshold_) {
             uint256 _over_ = _participants[participant_].balance + _amount_ - _maxThreshold_;
             _amount_ -= _over_;
@@ -435,12 +449,13 @@ contract Vault is BaseContract
      * @param taxRate_ Tax rate.
      * @return bool True if successful.
      */
-    function _claim(address participant_, uint256 taxRate_) internal returns (bool)
+    function _claim(address participant_, uint256 taxRate_) internal runAutoCompound returns (bool)
     {
         // Get some data that will be used a bunch.
         uint256 _timestamp_ = block.timestamp;
         uint256 _amount_ = _availableRewards(participant_);
         uint256 _maxPayout_ = _maxPayout(participant_);
+        _addReferrer(participant_, address(0));
         // Checks.
         require(_amount_ > 0, "Invalid claim amount");
         require(!_participants[participant_].banned, "Participant is banned");
@@ -449,6 +464,16 @@ contract Vault is BaseContract
         // Keep total under max payout.
         if(_participants[participant_].claimed + _amount_ > _maxPayout_) {
             _amount_ = _maxPayout_ - _participants[participant_].claimed;
+        }
+        // Check penalty claims
+        if(_penaltyClaims(participant_) + 1 >= _properties.penaltyClaims) {
+            // User is penalized
+            _participants[participant_].penalized = true;
+        }
+        // Check effective claims
+        if(_effectiveClaims(participant_, 1) >= _properties.negativeClaims) {
+            // User is negative
+            _participants[participant_].negative = true;
         }
         // Update the claims mapping.
         _claims[participant_].push(_timestamp_);
@@ -507,11 +532,11 @@ contract Vault is BaseContract
         if(_participants[participant_].penalized) {
             return _properties.lookbackPeriods; // Max amount of claims.
         }
-        uint256 _penaltyClaims_ = _claimsSinceTimestamp(participant_, block.timestamp - (_properties.period * _properties.penaltyLookbackPeriods)) + additional_;
+        uint256 _penaltyClaims_ = _penaltyClaims(participant_) + additional_;
         if(_penaltyClaims_ >= _properties.penaltyClaims) {
             return _properties.lookbackPeriods; // Max amount of claims.
         }
-        uint256 _claims_ = _claimsSinceTimestamp(participant_, block.timestamp - (_properties.period * _properties.lookbackPeriods)) + additional_;
+        uint256 _claims_ = _periodClaims(participant_) + additional_;
         if(_participants[participant_].negative && _claims_ < _properties.negativeClaims) {
             _claims_ = _properties.negativeClaims; // Once you go negative, you never go back!
         }
@@ -525,6 +550,26 @@ contract Vault is BaseContract
             _claims_ = _properties.neutralClaims; // User hasn't started yet.
         }
         return _claims_;
+    }
+
+    /**
+     * Claims.
+     * @param participant_ Participant address.
+     * @return uint256 Effective claims.
+     */
+    function _periodClaims(address participant_) internal view returns (uint256)
+    {
+        return _claimsSinceTimestamp(participant_, block.timestamp - (_properties.period * _properties.lookbackPeriods));
+    }
+
+    /**
+     * Penalty claims.
+     * @param participant_ Participant address.
+     * @return uint256 Effective claims.
+     */
+    function _penaltyClaims(address participant_) internal view returns (uint256)
+    {
+        return _claimsSinceTimestamp(participant_, block.timestamp - (_properties.period * _properties.penaltyLookbackPeriods));
     }
 
     /**
@@ -556,7 +601,7 @@ contract Vault is BaseContract
      * @param amount_ Amount to send.
      * @return bool True if successful.
      */
-    function airdrop(address to_, uint256 amount_) external returns (bool)
+    function airdrop(address to_, uint256 amount_) external runAutoCompound returns (bool)
     {
         return _airdrop(msg.sender, to_, amount_);
     }
@@ -568,7 +613,7 @@ contract Vault is BaseContract
      * @param maxBalance_ Maximum balance to qualify.
      * @return bool True if successful.
      */
-    function airdropTeam(uint256 amount_, uint256 minBalance_, uint256 maxBalance_) external returns (bool)
+    function airdropTeam(uint256 amount_, uint256 minBalance_, uint256 maxBalance_) external runAutoCompound returns (bool)
     {
         address[] memory _team_ = _referrals[msg.sender];
         uint256 _count_;
@@ -577,7 +622,11 @@ contract Vault is BaseContract
             if(_team_[i] == msg.sender) {
                 continue;
             }
-            if(_participants[_team_[i]].balance >= minBalance_ && _participants[_team_[i]].balance <= maxBalance_ && !_participants[_team_[i]].maxed) {
+            if( _participants[_team_[i]].balance >= minBalance_ &&
+                _participants[_team_[i]].balance <= maxBalance_ &&
+                !_participants[_team_[i]].maxed &&
+                _participants[_team_[i]].deposited + _participants[_team_[i]].airdropReceived + amount_ <= 5000e18
+            ) {
                 _count_ ++;
             }
         }
@@ -588,7 +637,11 @@ contract Vault is BaseContract
             if(_team_[i] == msg.sender) {
                 continue;
             }
-            if(_participants[_team_[i]].balance >= minBalance_ && _participants[_team_[i]].balance <= maxBalance_ && !_participants[_team_[i]].maxed) {
+            if( _participants[_team_[i]].balance >= minBalance_ &&
+                _participants[_team_[i]].balance <= maxBalance_ &&
+                !_participants[_team_[i]].maxed &&
+                _participants[_team_[i]].deposited + _participants[_team_[i]].airdropReceived + amount_ <= 5000e18
+            ) {
                 _airdrop(msg.sender, _team_[i], _airdropAmount_);
             }
         }
@@ -604,6 +657,11 @@ contract Vault is BaseContract
      */
     function _airdrop(address from_, address to_, uint256 amount_) internal returns (bool)
     {
+        require(!_participants[from_].banned, "Sender is banned");
+        require(!_participants[to_].banned, "Receiver is banned");
+        // Check if participant is new.
+        _addParticipant(to_);
+        _addReferrer(to_, address(0));
         // Get some data to use later.
         IToken _token_ = _token();
         uint256 _available_ = _token_.balanceOf(from_);
@@ -631,6 +689,8 @@ contract Vault is BaseContract
             emit Tax(to_, _taxAmount_);
         }
         // Add amount to receiver.
+        require(_participants[to_].balance + amount_ <= _maxThreshold(), "Recipient is maxed");
+        require(_participants[to_].deposited + _participants[to_].airdropReceived + amount_ <= 5000e18, "Maximum deposits received");
         _participants[to_].airdropReceived += amount_;
         _participants[to_].balance += amount_;
         // Emit airdrop event.
@@ -717,7 +777,7 @@ contract Vault is BaseContract
                 // Bonus is too high, so skip to the next referrer.
                 continue;
             }
-            if(_participants[_lastRewarded_].balance <= _participants[_lastRewarded_].claimed) {
+            if(_participants[_lastRewarded_].balance < _participants[_lastRewarded_].claimed) {
                 // Participant has claimed more than deposited/compounded.
                 continue;
             }
@@ -763,27 +823,23 @@ contract Vault is BaseContract
     }
 
     /**
-     * @param referrer_ New referrer address.
-     * @dev A user can update their referrer IF... their current referrer
-     *      is the dev wallet AND they don't have any direct referrals.
+     * Admin update referrer.
+     * @param participant_ Participant address.
+     * @param referrer_ Referrer address.
+     * @dev Owner can update someone's referrer.
      */
-    function updateReferrer(address referrer_) external
+    function adminUpdateReferrer(address participant_, address referrer_) external onlyOwner
     {
-        // Get safe address.
-        address _safe_ = addressBook.get("safe");
-        require(referrer_ != _safe_, "Invalid referrer");
-        require(_participants[msg.sender].referrer == _safe_, "You cannot change your referrer");
-        require(_participants[msg.sender].directReferrals == 0, "You cannot change your referrer");
-        // Remove referrer from dev wallet
-        for(uint i = 0; i < _referrals[_safe_].length; i ++) {
-            if(_referrals[_safe_][i] == msg.sender) {
-                delete _referrals[_safe_][i];
-                _participants[_safe_].directReferrals --;
+        for(uint i = 0; i < _referrals[_participants[participant_].referrer].length; i ++) {
+            if(_referrals[_participants[participant_].referrer][i] == participant_) {
+                delete _referrals[_participants[participant_].referrer][i];
+                _participants[_participants[participant_].referrer].directReferrals --;
                 break;
             }
         }
-        // Add new referrer.
-        _addReferrer(msg.sender, referrer_);
+        _participants[participant_].referrer = referrer_;
+        _participants[referrer_].directReferrals ++;
+        _referrals[referrer_].push(participant_);
     }
 
     /**
@@ -800,8 +856,12 @@ contract Vault is BaseContract
     function _availableRewards(address participant_) internal view returns (uint256)
     {
         uint256 _period_ = ((block.timestamp - _participants[participant_].lastRewardUpdate) * 10000) / _properties.period;
-        //uint256 _period_ = ((block.timestamp - _participants[participant_].lastRewardUpdate) * 1000) / _properties.period;
-        uint256 _available_ = ((_period_ * _rewardPercent(participant_) * _participants[participant_].balance) / 100000000) + _participants[participant_].availableRewards;
+        if(_period_ > 10000) {
+            // Only let rewards accumulate for 1 period.
+            _period_ = 10000;
+        }
+        uint256 _available_ = ((_period_ * _rewardPercent(participant_) * _participants[participant_].balance) / 100000000);
+        // Make sure participant doesn't go above max payout.
         uint256 _maxPayout_ = _maxPayout(participant_);
         if(_available_ + _participants[participant_].claimed > _maxPayout_) {
             _available_ = _maxPayout_ - _participants[participant_].claimed;
@@ -1020,7 +1080,7 @@ contract Vault is BaseContract
      */
     function _whaleTax(address participant_) internal view returns (uint256)
     {
-        uint256 _claimed_ = _participants[participant_].claimed;
+        uint256 _claimed_ = _participants[participant_].claimed + _participants[participant_].compounded;
         uint256 _tax_ = 0;
         if(_claimed_ > 10000 * (10 ** 18)) _tax_ = 500;
         if(_claimed_ > 20000 * (10 ** 18)) _tax_ = 1000;
@@ -1042,86 +1102,21 @@ contract Vault is BaseContract
      */
 
     /**
-     * Update max payout.
-     * @param maxPayout_ New max payout.
+     * Ban participant.
+     * @param participant_ Address of participant.
      */
-    function updateMaxPayout(uint256 maxPayout_) external onlyOwner
+    function banParticipant(address participant_) external onlyOwner
     {
-        _properties.maxPayout = maxPayout_;
+        _participants[participant_].banned = true;
     }
 
     /**
-     * Update max return.
-     * @param maxReturn_ New max return.
+     * Unban participant.
+     * @param participant_ Address of participant.
      */
-    function updateMaxReturn(uint256 maxReturn_) external onlyOwner
+    function unbanParticipant(address participant_) external onlyOwner
     {
-        _properties.maxReturn = maxReturn_;
-    }
-
-    /**
-     * Update period.
-     * @param period_ New period.
-     */
-    function updatePeriod(uint256 period_) external onlyOwner
-    {
-        _properties.period = period_;
-    }
-
-    /**
-     * Update lookback periods.
-     * @param lookbackPeriods_ New lookback.
-     */
-    function updateLookbackPeriods(uint256 lookbackPeriods_) external onlyOwner
-    {
-        _properties.lookbackPeriods = lookbackPeriods_;
-    }
-
-    /**
-     * Update penalty lookback periods.
-     * @param penaltyLookbackPeriods_ New penaltyLookback.
-     */
-    function updatePenaltyLookbackPeriods(uint256 penaltyLookbackPeriods_) external onlyOwner
-    {
-        _properties.penaltyLookbackPeriods = penaltyLookbackPeriods_;
-    }
-
-    /**
-     * Update neutral claims.
-     * @param neutralClaims_ New neutralClaims.
-     */
-    function updateNeutralClaims(uint256 neutralClaims_) external onlyOwner
-    {
-        _properties.neutralClaims = neutralClaims_;
-    }
-
-    /**
-     * Update negative claims.
-     * @param negativeClaims_ New negativeClaims.
-     */
-    function updateNegativeClaims(uint256 negativeClaims_) external onlyOwner
-    {
-        _properties.negativeClaims = negativeClaims_;
-    }
-
-    /**
-     * Update penalty claims.
-     * @param penaltyClaims_ New penaltyClaims.
-     */
-    function updatePenaltyClaims(uint256 penaltyClaims_) external onlyOwner
-    {
-        _properties.penaltyClaims = penaltyClaims_;
-    }
-
-
-    /**
-     * Update rate.
-     * @param claims_ Number of period claims.
-     * @param rate_ New rate.
-     */
-    function updateRate(uint256 claims_, uint256 rate_) external onlyOwner
-    {
-        _rates[claims_] = rate_;
+        _participants[participant_].banned = false;
     }
 
     /**
