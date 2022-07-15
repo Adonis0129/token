@@ -23,8 +23,7 @@ contract AutoCompound is BaseContract
     {
         __BaseContract_init();
         _properties.maxPeriods = 7;
-        _properties.period = 300; // DEV period is 5 minutes.
-        //_properties.period = 86400; // PRODUCTION period is 24 hours.
+        _properties.period = 86400; // PRODUCTION period is 24 hours.
         _properties.fee = 2000000000000000; // .002 BNB per period.
         _properties.minPresaleBalance = 1; // Must hold 1 presale NFT to participate.
         _properties.minVaultBalance = 100e18; // Must have a vault balance of 100 FUR to participate.
