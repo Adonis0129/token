@@ -285,7 +285,6 @@ contract Vault is BaseContract
     {
         require(_participants[participant_].deposited + _participants[participant_].airdropReceived + amount_ <= 5000e18, "Maximum deposit reached");
         // Get some data that will be used a bunch.
-        uint256 _timestamp_ = block.timestamp;
         uint256 _maxThreshold_ = _maxThreshold();
         // Checks.
         require(amount_ > 0, "Invalid deposit amount");
@@ -293,10 +292,6 @@ contract Vault is BaseContract
         require(_participants[participant_].balance < _maxThreshold_ , "Participant has reached the max payout threshold");
         // Check if participant is new.
         _addParticipant(participant_);
-        // Update participant available rewards
-        if(_participants[participant_].lastRewardUpdate == 0) {
-            _participants[participant_].lastRewardUpdate = _timestamp_;
-        }
         // Calculate tax amount.
         uint256 _taxAmount_ = amount_ * taxRate_ / 10000;
         if(_taxAmount_ > 0) {
@@ -602,6 +597,9 @@ contract Vault is BaseContract
      */
     function airdrop(address to_, uint256 amount_) external runAutoCompound returns (bool)
     {
+        require(!_participants[msg.sender].banned, "Sender is banned");
+        IToken _token_ = _token();
+        require(_token_.transferFrom(msg.sender, address(this), amount_), "Token transfer failed");
         return _airdrop(msg.sender, to_, amount_);
     }
 
@@ -614,6 +612,9 @@ contract Vault is BaseContract
      */
     function airdropTeam(uint256 amount_, uint256 minBalance_, uint256 maxBalance_) external runAutoCompound returns (bool)
     {
+        require(!_participants[msg.sender].banned, "Sender is banned");
+        IToken _token_ = _token();
+        require(_token_.transferFrom(msg.sender, address(this), amount_), "Token transfer failed");
         address[] memory _team_ = _referrals[msg.sender];
         uint256 _count_;
         // Loop through first to get number of qualified accounts.
@@ -656,20 +657,13 @@ contract Vault is BaseContract
      */
     function _airdrop(address from_, address to_, uint256 amount_) internal returns (bool)
     {
-        require(!_participants[from_].banned, "Sender is banned");
         require(!_participants[to_].banned, "Receiver is banned");
         // Check if participant is new.
         _addParticipant(to_);
         _addReferrer(to_, address(0));
-        // Get some data to use later.
-        IToken _token_ = _token();
-        uint256 _available_ = _token_.balanceOf(from_);
         // Check that airdrop can happen.
         require(from_ != to_, "Cannot airdrop to self");
-        require(_available_ >= amount_, "Insufficient balance");
         require(!_participants[to_].maxed, "Recipient is maxed");
-        // Transfer from sender to vault.
-        require(_token_.transferFrom(from_, address(this), amount_), "Token transfer failed");
         // Update sender airdrop stats.
         _participants[from_].airdropSent += amount_;
         // Update contract airdrop stats.
@@ -1049,6 +1043,7 @@ contract Vault is BaseContract
         // Check if participant is new.
         if(_participants[participant_].startTime == 0) {
             _participants[participant_].startTime = block.timestamp;
+            _participants[participant_].lastRewardUpdate = block.timestamp;
             _stats.totalParticipants ++;
         }
     }

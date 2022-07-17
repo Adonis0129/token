@@ -9,7 +9,7 @@ async function main() {
     const downlineAddress = await addressbook.get("downline");
     const Downline = await ethers.getContractFactory("DownlineV2");
     await upgrades.upgradeProxy(downlineAddress, Downline);
-    console.log("Downline contract upgraded");
+    console.log("Downline contract upgraded", downlineAddress);
 }
 
 main()

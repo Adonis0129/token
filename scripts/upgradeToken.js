@@ -9,7 +9,7 @@ async function main() {
     const tokenaddress = await addressbook.get("token");
     const Token = await ethers.getContractFactory("Token");
     await upgrades.upgradeProxy(tokenaddress, Token);
-    console.log("Token contract upgraded");
+    console.log("Token contract upgraded", tokenaddress);
 }
 
 main()

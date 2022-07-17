@@ -5,13 +5,18 @@ interface IAutoCompound {
     struct Properties {
         uint256 maxPeriods; // Maximum number of periods a participant can auto compound.
         uint256 period; // Seconds between compounds.
+        uint256 fee; // BNB fee per period of auto compounding.
+        uint256 minPresaleBalance; // Minimum number of presale NFTs a user needs to hold to participate.
+        uint256 minVaultBalance; // Minimum vault balance a user needs to participate.
+        uint256 maxParticipants; // Maximum autocompound participants.
     }
     struct Stats {
         uint256 compounding; // Number of participants auto compounding.
         uint256 compounds; // Number of auto compounds performed.
     }
     function addressBook (  ) external view returns ( address );
-    function compound ( uint256 count_ ) external;
+    function compound ( uint256 quantity_ ) external;
+    function compound ( ) external;
     function compoundAll (  ) external;
     function compounding (  ) external view returns ( address[] memory );
     function compounds ( address participant_ ) external view returns ( uint256[] memory );

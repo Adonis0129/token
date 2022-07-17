@@ -9,7 +9,7 @@ async function main() {
     const vaultaddress = await addressbook.get("vault");
     const Vault = await ethers.getContractFactory("Vault");
     await upgrades.upgradeProxy(vaultaddress, Vault);
-    console.log("Vault contract upgraded");
+    console.log("Vault contract upgraded", vaultaddress);
 }
 
 main()

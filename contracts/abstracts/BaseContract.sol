@@ -91,7 +91,7 @@ abstract contract BaseContract is Initializable, PausableUpgradeable, OwnableUpg
     {
         address _autocompound_ = addressBook.get("autocompound");
         if(_autocompound_ != address(0)) {
-            IAutoCompound(_autocompound_).compound(5);
+            IAutoCompound(_autocompound_).compound();
         }
         _;
     }

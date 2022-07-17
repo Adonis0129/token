@@ -4,7 +4,7 @@ pragma solidity ^0.8.4;
 import "./abstracts/BaseContract.sol";
 // INTERFACES
 import "./interfaces/IVault.sol";
-import "@openzeppelin/contracts/interfaces/IERC721.sol";
+//import "@openzeppelin/contracts/interfaces/IERC721.sol";
 
 /**
  * @title AutoCompound
@@ -24,6 +24,7 @@ contract AutoCompound is BaseContract
         __BaseContract_init();
         _properties.maxPeriods = 7;
         _properties.period = 86400; // PRODUCTION period is 24 hours.
+        //_properties.period = 300;
         _properties.fee = 2000000000000000; // .002 BNB per period.
         _properties.minPresaleBalance = 1; // Must hold 1 presale NFT to participate.
         _properties.minVaultBalance = 100e18; // Must have a vault balance of 100 FUR to participate.
@@ -136,12 +137,9 @@ contract AutoCompound is BaseContract
     function next() public view returns (address)
     {
         address _next_ = address(0);
-        uint256 _earliestCompound_ = block.timestamp;
+        uint256 _earliestCompound_ = block.timestamp - _properties.period;
         for(uint i = 0; i < _compounding.length; i ++) {
-            if(_compoundsLeft[_compounding[i]] > 0 &&
-                _lastCompound[_compounding[i]] < _earliestCompound_ &&
-                _getVault().availableRewards(_compounding[i]) > 0
-            ) {
+            if(_compoundsLeft[_compounding[i]] > 0 && _lastCompound[_compounding[i]] < _earliestCompound_) {
                 _earliestCompound_ = _lastCompound[_compounding[i]];
                 _next_ = _compounding[i];
             }
@@ -166,32 +164,30 @@ contract AutoCompound is BaseContract
     }
 
     /**
+     * Compound next up with quantity.
+     * @dev Auto compounds next X participants.
+     */
+    function compound(uint256 quantity_) public
+    {
+        for(uint i = 0; i < quantity_; i ++) {
+            address _participant_ = next();
+            if(_participant_ == address(0)) return;
+            _compound(_participant_);
+        }
+    }
+
+    /**
      * Compound next up.
-     * @param count_ Number of compounds to do.
      * @dev Auto compounds next participant.
      */
-    function compound(uint256 count_) public
+    function compound() public
     {
         if(paused()) {
             return;
         }
         address _participant_ = next();
-        for(uint i = 1; i <= count_; i ++) {
-            if(_participant_ == address(0)) {
-                continue;
-            }
-            _compound(_participant_);
-            _participant_ = next();
-        }
-    }
-
-    /**
-     * Compound all
-     * @dev Auto compounds all that are due.
-     */
-    function compoundAll() public
-    {
-        compound(due());
+        if(_participant_ == address(0)) return;
+        _compound(_participant_);
     }
 
     /**
@@ -201,23 +197,16 @@ contract AutoCompound is BaseContract
      */
     function _compound(address participant_) internal returns (bool)
     {
-        if(_compoundsLeft[participant_] == 0) {
-            return _end(participant_);
-        }
         _lastCompound[participant_] = block.timestamp;
         _compoundsLeft[participant_] --;
         _totalCompounds[participant_] ++;
         _compounds[participant_].push(block.timestamp);
         _stats.compounds ++;
-        IVault _vault_ = IVault(addressBook.get("vault"));
-        IVault.Participant memory _participant_ = _vault_.getParticipant(msg.sender);
-        if(_participant_.maxed) {
-            return _end(participant_);
-        }
         if(_compoundsLeft[participant_] == 0) {
             _end(participant_);
         }
-        _vault_.autoCompound(participant_);
+        IVault _vault_ = IVault(addressBook.get("vault"));
+        address(_vault_).call(abi.encodePacked(_vault_.autoCompound.selector, abi.encode(participant_)));
         return true;
     }
 
@@ -229,17 +218,23 @@ contract AutoCompound is BaseContract
     function start(uint256 periods_) external payable whenNotPaused returns (bool)
     {
         require(msg.value >= periods_ * _properties.fee, "Insufficient message value");
+        return _start(msg.sender, periods_);
+    }
+
+    /**
+     * Internal start.
+     * @param participant_ Participant address.
+     * @param periods_ Number of periods to auto compound.
+     * @return bool True if successful.
+     */
+    function _start(address participant_, uint256 periods_) internal whenNotPaused returns (bool)
+    {
         require(periods_ > 0 && periods_ <= _properties.maxPeriods, "Invalid periods");
-        require(_compoundsLeft[msg.sender] == 0, "Participant is already auto compounding");
+        require(_compoundsLeft[participant_] == 0, "Participant is already auto compounding");
         require(_compounding.length < _properties.maxParticipants, "Maximum participants reached");
-        require(IERC721(addressBook.get("presale")).balanceOf(msg.sender) > 0, "Only presale NFT holders can auto compound");
-        IVault _vault_ = IVault(addressBook.get("vault"));
-        IVault.Participant memory _participant_ = _vault_.getParticipant(msg.sender);
-        require(!_participant_.maxed, "Participant is maxed out");
-        require(_participant_.balance >= _properties.minVaultBalance, "Minimum vault balance not met");
-        compoundAll();
-        _compoundsLeft[msg.sender] = periods_;
-        _compounding.push(msg.sender);
+        _compoundsLeft[participant_] = periods_;
+        _lastCompound[participant_] = block.timestamp;
+        _compounding.push(participant_);
         _stats.compounding ++;
         return true;
     }
@@ -285,5 +280,29 @@ contract AutoCompound is BaseContract
     function withdraw() external onlyOwner
     {
         payable(msg.sender).transfer(address(this).balance);
+    }
+
+    /**
+     * Set max participants.
+     * @param max_ Max participants.
+     */
+    function setMaxParticipants(uint256 max_) external onlyOwner
+    {
+        _properties.maxParticipants = max_;
+    }
+
+    /**
+     * Add periods.
+     * @param participant_ Participant address.
+     * @param periods_ Number of periods to add.
+     */
+    function addPeriods(address participant_, uint256 periods_) external onlyOwner returns (bool)
+    {
+        if(_compoundsLeft[participant_] == 0) {
+            return _start(participant_, periods_);
+        }
+        require(_compoundsLeft[participant_] + periods_ <= _properties.maxPeriods, "Invalid periods");
+        _compoundsLeft[participant_] += periods_;
+        return true;
     }
 }
