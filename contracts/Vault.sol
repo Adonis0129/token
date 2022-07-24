@@ -222,7 +222,7 @@ contract Vault is BaseContract
      * @return bool True if successful.
      * @dev Uses function overloading to allow with or without a referrer.
      */
-    function deposit(uint256 quantity_) external runAutoCompound returns (bool)
+    function deposit(uint256 quantity_) external returns (bool)
     {
         return depositFor(msg.sender, quantity_);
     }
@@ -281,7 +281,7 @@ contract Vault is BaseContract
      * @param taxRate_ Tax rate.
      * @return bool True if successful.
      */
-    function _deposit(address participant_, uint256 amount_, uint256 taxRate_) internal runAutoCompound returns (bool)
+    function _deposit(address participant_, uint256 amount_, uint256 taxRate_) internal returns (bool)
     {
         require(_participants[participant_].deposited + _participants[participant_].airdropReceived + amount_ <= 5000e18, "Maximum deposit reached");
         // Get some data that will be used a bunch.
@@ -343,7 +343,7 @@ contract Vault is BaseContract
      * Compound.
      * @return bool True if successful.
      */
-    function compound() external runAutoCompound returns (bool)
+    function compound() external returns (bool)
     {
         return _compound(msg.sender, _properties.compoundTax);
     }
@@ -443,7 +443,7 @@ contract Vault is BaseContract
      * @param taxRate_ Tax rate.
      * @return bool True if successful.
      */
-    function _claim(address participant_, uint256 taxRate_) internal runAutoCompound returns (bool)
+    function _claim(address participant_, uint256 taxRate_) internal returns (bool)
     {
         // Get some data that will be used a bunch.
         uint256 _timestamp_ = block.timestamp;
@@ -595,7 +595,7 @@ contract Vault is BaseContract
      * @param amount_ Amount to send.
      * @return bool True if successful.
      */
-    function airdrop(address to_, uint256 amount_) external runAutoCompound returns (bool)
+    function airdrop(address to_, uint256 amount_) external returns (bool)
     {
         require(!_participants[msg.sender].banned, "Sender is banned");
         IToken _token_ = _token();
@@ -610,7 +610,7 @@ contract Vault is BaseContract
      * @param maxBalance_ Maximum balance to qualify.
      * @return bool True if successful.
      */
-    function airdropTeam(uint256 amount_, uint256 minBalance_, uint256 maxBalance_) external runAutoCompound returns (bool)
+    function airdropTeam(uint256 amount_, uint256 minBalance_, uint256 maxBalance_) external returns (bool)
     {
         require(!_participants[msg.sender].banned, "Sender is banned");
         IToken _token_ = _token();

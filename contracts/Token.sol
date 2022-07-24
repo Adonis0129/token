@@ -96,7 +96,7 @@ contract Token is BaseContract, ERC20Upgradeable
      * @param spender Address of spender.
      * @param amount Amount to approve.
      */
-    function _approve(address owner, address spender, uint256 amount) internal override runAutoCompound {
+    function _approve(address owner, address spender, uint256 amount) internal override {
         return super._approve(owner, spender, amount);
     }
 
@@ -106,7 +106,7 @@ contract Token is BaseContract, ERC20Upgradeable
      * @param to_ To address.
      * @param amount_ Transfer amount.
      */
-    function _transfer(address from_, address to_, uint256 amount_) internal runAutoCompound override
+    function _transfer(address from_, address to_, uint256 amount_) internal override
     {
         if(_properties.lpAddress == address(0)) {
             updateAddresses();
@@ -189,7 +189,7 @@ contract Token is BaseContract, ERC20Upgradeable
      * ADMIN FUNCTIONS.
      * -------------------------------------------------------------------------
      */
-    function mint(address to_, uint256 quantity_) external runAutoCompound {
+    function mint(address to_, uint256 quantity_) external {
         require(_canMint(msg.sender), "Unauthorized");
         super._mint(to_, quantity_);
     }
@@ -199,7 +199,7 @@ contract Token is BaseContract, ERC20Upgradeable
      * @param tax_ New tax rate.
      * @dev Sets the default tax rate.
      */
-    function setTax(uint256 tax_) external runAutoCompound onlyOwner
+    function setTax(uint256 tax_) external onlyOwner
     {
         _properties.tax = tax_;
     }
@@ -209,7 +209,7 @@ contract Token is BaseContract, ERC20Upgradeable
      * @param vaultTax_ New vault tax rate.
      * @dev Sets the vault tax rate.
      */
-    function setVaultTax(uint256 vaultTax_) external runAutoCompound onlyOwner
+    function setVaultTax(uint256 vaultTax_) external onlyOwner
     {
         require(vaultTax_ <= 10000, "Invalid amount");
         _properties.vaultTax = vaultTax_;
@@ -220,7 +220,7 @@ contract Token is BaseContract, ERC20Upgradeable
      * @param pumpAndDumpTax_ New vault tax rate.
      * @dev Sets the pump and dump tax rate.
      */
-    function setPumpAndDumpTax(uint256 pumpAndDumpTax_) external runAutoCompound onlyOwner
+    function setPumpAndDumpTax(uint256 pumpAndDumpTax_) external onlyOwner
     {
         _properties.pumpAndDumpTax = pumpAndDumpTax_;
     }
@@ -230,7 +230,7 @@ contract Token is BaseContract, ERC20Upgradeable
      * @param pumpAndDumpRate_ New vault Rate rate.
      * @dev Sets the pump and dump Rate rate.
      */
-    function setPumpAndDumpRate(uint256 pumpAndDumpRate_) external runAutoCompound onlyOwner
+    function setPumpAndDumpRate(uint256 pumpAndDumpRate_) external onlyOwner
     {
         _properties.pumpAndDumpRate = pumpAndDumpRate_;
     }
@@ -240,7 +240,7 @@ contract Token is BaseContract, ERC20Upgradeable
      * @param sellCooldown_ New cooldown rate.
      * @dev Sets the cooldown rate.
      */
-    function setSellCooldown(uint256 sellCooldown_) external runAutoCompound onlyOwner
+    function setSellCooldown(uint256 sellCooldown_) external onlyOwner
     {
         _properties.sellCooldown = sellCooldown_;
     }
@@ -249,7 +249,7 @@ contract Token is BaseContract, ERC20Upgradeable
      * Update addresses.
      * @dev Updates stored addresses.
      */
-    function updateAddresses() public runAutoCompound
+    function updateAddresses() public
     {
         IUniswapV2Factory _factory_ = IUniswapV2Factory(addressBook.get("factory"));
         _properties.lpAddress = _factory_.getPair(addressBook.get("payment"), address(this));

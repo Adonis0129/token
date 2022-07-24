@@ -81,18 +81,4 @@ abstract contract BaseContract is Initializable, PausableUpgradeable, OwnableUpg
         onlyOwner
         override
     {}
-
-    /**
-     * -------------------------------------------------------------------------
-     * MODIFIERS.
-     * -------------------------------------------------------------------------
-     */
-    modifier runAutoCompound()
-    {
-        address _autocompound_ = addressBook.get("autocompound");
-        if(_autocompound_ != address(0)) {
-            IAutoCompound(_autocompound_).compound();
-        }
-        _;
-    }
 }
