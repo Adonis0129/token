@@ -94,7 +94,7 @@ contract Claim is BaseContract
      * @param vault_ Send tokens straight to vault.
      * @return bool True if successful.
      */
-    function claim(uint256 quantity_, address address_, bool vault_) external returns (bool)
+    function claim(uint256 quantity_, address address_, bool vault_) external whenNotPaused returns (bool)
     {
         return _claim(quantity_, address_, vault_, address(0));
     }

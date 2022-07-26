@@ -6,10 +6,10 @@ const addressBook = process.env.ADDRESS_BOOK || '';
 async function main() {
     const AddressBook = await ethers.getContractFactory("AddressBook");
     const addressbook = await AddressBook.attach(addressBook);
-    const autocompound = await addressbook.get("autocompound");
-    const AutoCompound = await ethers.getContractFactory("AutoCompoundV2");
-    await upgrades.upgradeProxy(autocompound, AutoCompound);
-    console.log("AutoCompound contract upgraded", autocompound);
+    const claimaddress = await addressbook.get("claim");
+    const Claim = await ethers.getContractFactory("Claim");
+    await upgrades.upgradeProxy(claimaddress, Claim);
+    console.log("Claim contract upgraded", claimaddress);
 }
 
 main()

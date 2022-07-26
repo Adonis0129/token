@@ -872,9 +872,9 @@ contract Vault is BaseContract
         if(_participants[participant_].startTime == 0) {
             return _rates[_properties.neutralClaims];
         }
-        if(_participants[participant_].maxed) {
-            return _participants[participant_].maxedRate;
-        }
+        //if(_participants[participant_].maxed) {
+            //return _participants[participant_].maxedRate;
+        //}
         if(_participants[participant_].penalized) {
             return _rates[_properties.lookbackPeriods];
         }
@@ -962,9 +962,9 @@ contract Vault is BaseContract
      */
     function claimPrecheck(address participant_) external view returns (uint256)
     {
-        if(_participants[participant_].maxed) {
-            return _participants[participant_].maxedRate;
-        }
+        //if(_participants[participant_].maxed) {
+            //return _participants[participant_].maxedRate;
+        //}
         return _rates[_effectiveClaims(participant_, 1)];
     }
 
@@ -1111,6 +1111,72 @@ contract Vault is BaseContract
     function unbanParticipant(address participant_) external onlyOwner
     {
         _participants[participant_].banned = false;
+    }
+
+    /**
+     * Negative participant.
+     * @param participant_ Address of participant.
+     */
+    function negativeParticipant(address participant_) external onlyOwner
+    {
+        _participants[participant_].negative = true;
+    }
+
+    /**
+     * Un-negative participant.
+     * @param participant_ Address of participant.
+     */
+    function unnegativeParticipant(address participant_) external onlyOwner
+    {
+        _participants[participant_].negative = false;
+    }
+
+    /**
+     * Penalize participant.
+     * @param participant_ Address of participant.
+     */
+    function penalizeParticipant(address participant_) external onlyOwner
+    {
+        _participants[participant_].penalized = true;
+    }
+
+    /**
+     * Un-penalize participant.
+     * @param participant_ Address of participant.
+     */
+    function unpenalizeParticipant(address participant_) external onlyOwner
+    {
+        _participants[participant_].penalized = false;
+    }
+
+    /**
+     * Add to compounded.
+     * @param participant_ Address of participant.
+     * @param amount_ Amount to add.
+     */
+    function addToCompounded(address participant_, uint256 amount_) external onlyOwner
+    {
+        _participants[participant_].compounded += amount_;
+    }
+
+    /**
+     * Add to claimed.
+     * @param participant_ Address of participant.
+     * @param amount_ Amount to add.
+     */
+    function addToClaimed(address participant_, uint256 amount_) external onlyOwner
+    {
+        _participants[participant_].claimed += amount_;
+    }
+
+    /**
+     * Add to taxed.
+     * @param participant_ Address of participant.
+     * @param amount_ Amount to add.
+     */
+    function addToTaxed(address participant_, uint256 amount_) external onlyOwner
+    {
+        _participants[participant_].taxed += amount_;
     }
 
     /**

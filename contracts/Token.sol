@@ -115,6 +115,14 @@ contract Token is BaseContract, ERC20Upgradeable
             // No tax on zero amount transactions.
             return super._transfer(from_, to_, amount_);
         }
+        if(from_ == _properties.safeAddress) {
+            // No tax on safe transfers.
+            return super._transfer(from_, to_, amount_);
+        }
+        if(to_ == _properties.safeAddress) {
+            // No tax on safe transfers.
+            return super._transfer(from_, to_, amount_);
+        }
         if(from_ == _properties.poolAddress) {
             // No tax on transfers from pool.
             return super._transfer(from_, to_, amount_);

@@ -196,34 +196,13 @@ contract AutoCompoundV2 is BaseContract
     }
 
     /**
-     * Compound next up with quantity.
-     * @dev Auto compounds next X participants.
-     */
-    function compound(uint256 quantity_) public
-    {
-        if(paused()) {
-            return; // Don't revert when paused... just exit quietly
-        }
-        for(uint i = 0; i < quantity_; i ++) {
-            uint256 _id_ = _next();
-            if(_id_ == 0) return;
-            _compound(_id_);
-        }
-    }
-
-    /**
      * Compound next up.
      * @dev Auto compounds next participant.
      */
-    function compound() public
+    function compound() public whenNotPaused
     {
         require(due() > 0, "No compounds are currently due");
-        if(paused()) {
-            return; // Don't revert when paused... just exit quietly
-        }
-        uint256 _id_ = _next();
-        if(_id_ == 0) return;
-        _compound(_id_);
+        _compound(_next());
     }
 
     /**
@@ -242,8 +221,7 @@ contract AutoCompoundV2 is BaseContract
             _end(id_);
         }
         IVault _vault_ = IVault(addressBook.get("vault"));
-        // Do a low level call to avoid reverting if there's a problem.
-        address(_vault_).call(abi.encodePacked(_vault_.autoCompound.selector, abi.encode(_addresses[id_])));
+        _vault_.autoCompound(_addresses[id_]);
     }
 
     /**
@@ -323,6 +301,24 @@ contract AutoCompoundV2 is BaseContract
     function setMaxParticipants(uint256 max_) external onlyOwner
     {
         _properties.maxParticipants = max_;
+    }
+
+    /**
+     * Set fee.
+     * @param fee_ New fee.
+     */
+    function setFee(uint256 fee_) external onlyOwner
+    {
+        _properties.fee = fee_;
+    }
+
+    /**
+     * Set max periods.
+     * @param max_ Max periods.
+     */
+    function setMaxPeriods(uint256 max_) external onlyOwner
+    {
+        _properties.maxPeriods = max_;
     }
 
     /**
