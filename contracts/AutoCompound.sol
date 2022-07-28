@@ -233,7 +233,7 @@ contract AutoCompound is BaseContract
         require(_compoundsLeft[participant_] == 0, "Participant is already auto compounding");
         require(_compounding.length < _properties.maxParticipants, "Maximum participants reached");
         _compoundsLeft[participant_] = periods_;
-        _lastCompound[participant_] = block.timestamp;
+        _lastCompound[participant_] = block.timestamp - _properties.period;
         _compounding.push(participant_);
         _stats.compounding ++;
         return true;

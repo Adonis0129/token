@@ -146,16 +146,6 @@ contract AutoCompoundV2 is BaseContract
     }
 
     /**
-     * Get compounds.
-     * @param participant_ Participant address.
-     * @return uint256[] Array of compound timestamps.
-     */
-    function compounds(address participant_) external view returns (uint256[] memory)
-    {
-        return _compounds[_ids[participant_]];
-    }
-
-    /**
      * Next up.
      * @return address Next address to be compounded.
      * @dev Returns the next address in line that needs to be compounded.
@@ -201,8 +191,9 @@ contract AutoCompoundV2 is BaseContract
      */
     function compound() public whenNotPaused
     {
-        require(due() > 0, "No compounds are currently due");
-        _compound(_next());
+        uint256 _id_ = _next();
+        require(_id_ > 0, "No participants to compound.");
+        _compound(_id_);
     }
 
     /**
@@ -215,7 +206,6 @@ contract AutoCompoundV2 is BaseContract
         _lastCompound[id_] = block.timestamp;
         _compoundsLeft[id_] --;
         _totalCompounds[id_] ++;
-        _compounds[id_].push(block.timestamp);
         _stats.compounds ++;
         if(_compoundsLeft[id_] == 0) {
             _end(id_);
@@ -252,7 +242,7 @@ contract AutoCompoundV2 is BaseContract
         require(_compoundsLeft[_id_] == 0, "Participant is already auto compounding");
         require(_stats.compounding < _properties.maxParticipants, "Maximum participants reached");
         _compoundsLeft[_id_] = periods_;
-        _lastCompound[_id_] = block.timestamp;
+        _lastCompound[_id_] = block.timestamp - _properties.period;
         _compounding[_id_] = true;
         _stats.compounding ++;
     }
