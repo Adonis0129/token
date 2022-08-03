@@ -59,7 +59,7 @@ module.exports = {
         bsc: {
             url: process.env.BSC_RPC_URL || '',
             accounts: accounts,
-            gasMultiplier: 5,
+            gasMultiplier: 10,
             timeout: 60000,
         },
     },
