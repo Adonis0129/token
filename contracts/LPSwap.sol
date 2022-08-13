@@ -100,6 +100,7 @@ contract LPSwap is BaseContract {
             require(msg.value >= paymentAmount_, "Invalid amount");
 
             address[] memory _pathFromEthToUSDC = pathFromTokenToUSDC[paymentAddress_];
+            require(_pathFromEthToUSDC.length >=2, "Don't exist path");
             uint256 _USDCBalanceBefore_ = _usdc_.balanceOf(address(this));
             router.swapExactETHForTokensSupportingFeeOnTransferTokens{value: paymentAmount_}(
                 0, 
@@ -125,6 +126,7 @@ contract LPSwap is BaseContract {
             }
             
             address[] memory _pathFromTokenToUSDC = pathFromTokenToUSDC[paymentAddress_];
+            require(_pathFromTokenToUSDC.length >=2, "Don't exist path");
             _payment_.approve(address(router), paymentAmount_);
             uint256 _USDCBalanceBefore1_ = _usdc_.balanceOf(address(this));
             router.swapExactTokensForTokensSupportingFeeOnTransferTokens(
