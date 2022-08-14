@@ -261,6 +261,8 @@ contract LPStaking is BaseContract, ERC20Upgradeable
         totalStakingAmount = totalStakingAmount.add(_pending_);
         _totalBoostedAmount = _totalBoostedAmount.add(_pending_);
 
+        updateRewardPool();
+
         emit Compound(msg.sender, _pending_);
     }
 
@@ -281,6 +283,7 @@ contract LPStaking is BaseContract, ERC20Upgradeable
         );
 
         updateRewardPool();
+
         IERC20(lpAddress).transfer(msg.sender, _amount_.mul(900).div(1000));
         IERC20(lpAddress).transfer(_LPLockReceiver, _amount_.mul(30).div(1000));
 
