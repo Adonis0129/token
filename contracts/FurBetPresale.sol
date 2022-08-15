@@ -23,12 +23,12 @@ contract FurBetPresale is BaseContract
     function initialize() initializer public
     {
         __BaseContract_init();
-        _start = 1659463200; // Tue Aug 02 2022 18:00:00 GMT+0000
-        _presaleOneTime = 10 minutes;
-        _presaleTwoTime = 25 minutes;
-        _presaleThreeTime = 2 days;
-        _presaleFourTime = _presaleThreeTime + 15 minutes;
-        _presaleFiveTime = _presaleThreeTime + 4 days;
+        //_start = 1659463200; // Tue Aug 02 2022 18:00:00 GMT+0000
+        //_presaleOneTime = 10 minutes;
+        //_presaleTwoTime = 25 minutes;
+        //_presaleThreeTime = 2 days;
+        //_presaleFourTime = _presaleThreeTime + 15 minutes;
+        //_presaleFiveTime = _presaleThreeTime + 4 days;
         _presaleOnePrice = 50e16;
         _presaleTwoPrice = 50e16;
         _presaleThreePrice = 50e16;
@@ -54,6 +54,13 @@ contract FurBetPresale is BaseContract
         _presaleThreeMaxPerAddress = 0;
         _presaleFourMaxPerAddress = 2000e18;
         _presaleFiveMaxPerAddress = 0;
+        // DEV PROPERTIES
+        _start = 1659380400;
+        _presaleOneTime = 5 minutes;
+        _presaleTwoTime = 10 minutes;
+        _presaleThreeTime = 15 minutes;
+        _presaleFourTime = 20 minutes;
+        _presaleFiveTime = 25 minutes;
     }
 
     /**
@@ -243,28 +250,19 @@ contract FurBetPresale is BaseContract
             }
         }
         IERC20 _payment_ = IERC20(addressBook.get("payment"));
-        require(_payment_.transferFrom(msg.sender, addressBook.get("safe"), _price_ * (amount_ / (10 ** 18))), "Unable to transfer tokens.");
+        require(_payment_.transferFrom(msg.sender, addressBook.get("safe"), _price_ * amount_), "Unable to transfer tokens.");
         _sold += amount_;
         _purchased[msg.sender] += amount_;
         IFurBetToken _token_ = IFurBetToken(addressBook.get("furbettoken"));
         IFurBetStake _stake_ = IFurBetStake(addressBook.get("furbetstake"));
         _token_.mint(address(this), amount_);
-        _token_.approve(address(_stake_), amount_ / 4);
+        _token_.approve(addressBook.get("furbetstake"), amount_ / 4);
         _stake_.stakeFor(msg.sender, 1, amount_ / 4);
-        _token_.approve(address(_stake_), amount_ / 4);
+        _token_.approve(addressBook.get("furbetstake"), amount_ / 4);
         _stake_.stakeFor(msg.sender, 2, amount_ / 4);
-        _token_.approve(address(_stake_), amount_ / 4);
+        _token_.approve(addressBook.get("furbetstake"), amount_ / 4);
         _stake_.stakeFor(msg.sender, 3, amount_ / 4);
-        _token_.approve(address(_stake_), amount_ / 4);
+        _token_.approve(addressBook.get("furbetstake"), amount_ / 4);
         _stake_.stakeFor(msg.sender, 4, amount_ / 4);
-    }
-
-    /**
-     * Set start.
-     * @param start_ New start time.
-     */
-    function setStart(uint256 start_) external onlyOwner
-    {
-        _start = start_;
     }
 }

@@ -3,7 +3,6 @@ pragma solidity ^0.8.4;
 
 import "./abstracts/BaseContract.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC721/ERC721Upgradeable.sol";
-import "@openzeppelin/contracts/utils/Strings.sol";
 // Interfaces.
 import "./interfaces/IFurBetToken.sol";
 
@@ -79,7 +78,7 @@ contract FurBetStake is BaseContract, ERC721Upgradeable
      */
     function _stake(address participant_, uint256 period_, uint256 amount_) internal
     {
-        require(_periods[period_] > block.timestamp, "Period must be in the future");
+        require(_periods[period_] > 0 && _periods[period_] <= block.timestamp, "Period is not active");
         _tokenTracker ++;
         _tokens[_tokenTracker] = period_;
         _tokenAmount[_tokenTracker] = amount_;
@@ -122,16 +121,5 @@ contract FurBetStake is BaseContract, ERC721Upgradeable
      */
     function _transfer(address from, address to, uint256 tokenId) internal pure override {
         require(true == false, "Transfers are disabled");
-    }
-
-    /**
-     * Token URI.
-     * @param tokenId_ The id of the token.
-     * @notice This returns base64 encoded json for the token metadata. Allows us
-     * to avoid putting metadata on IPFS.
-     */
-    function tokenURI(uint256 tokenId_) public view override returns (string memory) {
-        require(_exists(tokenId_), "Token does not exist");
-        return string(abi.encodePacked("ipfs://QmWTqGbnCr7q9K9iZnWNBrFbXoZfiu3EeMPedhz4kUXzz3/",Strings.toString(_tokens[tokenId_])));
     }
 }
