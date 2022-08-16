@@ -14,7 +14,7 @@ import "@uniswap/v2-core/contracts/interfaces/IUniswapV2Factory.sol";
  */
 
 /// @custom:security-contact security@furio.io
-contract WBNB is BaseContract, ERC20Upgradeable
+contract USDT is BaseContract, ERC20Upgradeable
 {
     /**
      * Contract initializer.
@@ -23,7 +23,7 @@ contract WBNB is BaseContract, ERC20Upgradeable
     function initialize() initializer public
     {
         __BaseContract_init();
-        __ERC20_init("WBNB", "WBNB");
+        __ERC20_init("USDT", "USDT");
     }
 
     /**

@@ -4,14 +4,15 @@ require("dotenv").config();
 const addressBook = process.env.ADDRESS_BOOK || '';
 
 async function main() {
-    const AutoCompoundV2 = await ethers.getContractFactory("AutoCompoundV2");
-    const autocompound = await upgrades.deployProxy(AutoCompoundV2);
-    await autocompound.deployed();
-    await autocompound.setAddressBook(addressBook);
     const AddressBook = await ethers.getContractFactory("AddressBook");
     const addressbook = await AddressBook.attach(addressBook);
-    await addressbook.set('autocompound', autocompound.address);
-    console.log("AutoCompoundV2 proxy deployed to:", autocompound.address);
+    // deploy token
+    const USDC = await ethers.getContractFactory("USDC");
+    const usdc = await upgrades.deployProxy(USDC);
+    await usdc.deployed();
+    await usdc.setAddressBook(addressBook);
+    await addressbook.set("payment", usdc.address);
+    console.log("USDC proxy deployed to:", usdc.address);
 }
 
 main()
