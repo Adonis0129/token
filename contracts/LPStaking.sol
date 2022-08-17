@@ -48,13 +48,11 @@ contract LPStaking is BaseContract, ERC20Upgradeable
      */
     address  public lpAddress;
     address  public usdcAddress;
-    address  _LPLockReceiver; //address for LP lock
-    address[] LPholders; // LP holders address. to get LP reflection, they have to register thier address here.
-
     address  public routerAddress;
     address  public tokenAddress;
     IUniswapV2Router02 public router;
-    mapping(address => address[]) public pathFromTokenToUSDC;
+    address  _LPLockReceiver; //address for LP lock
+    address[] LPholders; // LP holders address. to get LP reflection, they have to register thier address here.
 
     uint256  _lastUpdateTime; //LP RewardPool Updated time
     uint256  _accLPPerShare;  //Accumulated LPs per share, times 1e36. See below.
@@ -72,6 +70,7 @@ contract LPStaking is BaseContract, ERC20Upgradeable
      */
     mapping(address => Staker) public stakers;
     mapping(address => uint256) _LPholderIndexes;
+    mapping(address => address[]) public pathFromTokenToUSDC;
 
     /**
      * Event.
@@ -145,7 +144,7 @@ contract LPStaking is BaseContract, ERC20Upgradeable
         _totalReward = IERC20(lpAddress).balanceOf(address(this))
             .sub(totalStakingAmount)
             .sub(_totalReflection);
-        uint256 _amountForReward_ = _totalReward.mul(25).div(10000).mul(_times_);
+        uint256 _amountForReward_ = _totalReward.mul(25).div(1000).mul(_times_);
         uint256 _RewardPerShare_ = _amountForReward_
             .mul(_dividendsPerShareAccuracyFactor)
             .div(_totalBoostedAmount);
