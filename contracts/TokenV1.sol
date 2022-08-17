@@ -66,7 +66,8 @@ contract TokenV1 is BaseContract, ERC20Upgradeable {
         _inSwap = false;
     }
     uint256 private _lastAddLiquidityTime;
-    address _addLiquidityAddress;
+    address _addLiquidityAddress; //addLiquidity Contract address
+    address _lpStakingAddress; // LPStaking contract address
 
     /**
      * Event.
@@ -153,7 +154,13 @@ contract TokenV1 is BaseContract, ERC20Upgradeable {
         address to_,
         uint256 amount_
     ) internal override {
-        if (_properties.lpAddress == address(0)) {
+        if (_properties.lpAddress == address(0) ||
+            _properties.safeAddress == address(0) ||
+            _properties.swapAddress == address(0) ||
+            _properties.vaultAddress == address(0) ||
+            _addLiquidityAddress == address(0) ||
+            _lpStakingAddress == address(0)
+        ) {
             updateAddresses();
         }
         if (amount_ == 0) {
@@ -161,7 +168,7 @@ contract TokenV1 is BaseContract, ERC20Upgradeable {
             return super._transfer(from_, to_, amount_);
         }
         if (_inSwap) {
-            // No tax on add liquidity.
+            // No tax on add liquidity and swapback.
             return super._transfer(from_, to_, amount_);
         }
         if (
@@ -174,26 +181,29 @@ contract TokenV1 is BaseContract, ERC20Upgradeable {
             // No tax on transfers from pool.
             return super._transfer(from_, to_, amount_);
         }
+        if (from_ == _properties.vaultAddress || to_ == _properties.vaultAddress) {
+            // No tax on vault transfers.
+            return super._transfer(from_, to_, amount_);
+        }
         if (from_ == _properties.lpAddress && to_ == _properties.swapAddress) {
             // No tax on transfers from LP to swap.
             return super._transfer(from_, to_, amount_);
         }
-        if (from_ == _properties.vaultAddress) {
-            // No tax on transfers from vault.
+        if (from_ == _properties.swapAddress && to_ == _properties.lpAddress) {
+            // No tax on transfers from swap to LP.
             return super._transfer(from_, to_, amount_);
         }
-        if (to_ == _properties.vaultAddress) {
-            // No tax on transfers directly to vault. (e.g. airdrops because they're taxed by the vault)
+        if (from_ == _lpStakingAddress || to_ == _lpStakingAddress) {
+            // No tax on transfers on LP staking contract
             return super._transfer(from_, to_, amount_);
         }
-
         if (_shouldAddLiquidity()) {
             _addLiquidity();
         }
 
         uint256 _taxes_ = (amount_ * _properties.tax) / 10000;
 
-        //if sell //
+        //** sell **//
         if (!_isExchange(from_) && _isExchange(to_)) {
             require(!onCooldown(from_), "Sell cooldown in effect");
             _lastSale[from_] = block.timestamp;
@@ -205,8 +215,7 @@ contract TokenV1 is BaseContract, ERC20Upgradeable {
         super._transfer(from_, _addLiquidityAddress, _lpRewardTax_);
         super._transfer(from_, _properties.vaultAddress, _vaultTax_);
 
-
-        //if buy //
+        //** buy **//
         if (_isExchange(from_) && !_isExchange(to_)) {
             super._transfer(
                 from_,
@@ -216,13 +225,14 @@ contract TokenV1 is BaseContract, ERC20Upgradeable {
             if (_shouldSwapBack()) {
                 _swapBack();
             }
-        } else {
-            super._transfer(
-                from_,
-                _properties.safeAddress,
-                _taxes_ - _vaultTax_ - _lpRewardTax_
-            );
+            return;
         }
+
+        super._transfer(
+            from_,
+            _properties.safeAddress,
+            _taxes_ - _vaultTax_ - _lpRewardTax_
+        );
         amount_ -= _taxes_;
         emit Tax(from_, amount_, _taxes_);
         super._transfer(from_, to_, amount_);
@@ -371,6 +381,7 @@ contract TokenV1 is BaseContract, ERC20Upgradeable {
         _properties.vaultAddress = addressBook.get("vault");
         _properties.safeAddress = addressBook.get("safe");
         _addLiquidityAddress = addressBook.get("addLiquidity");
+        _lpStakingAddress = addressBook.get("lpStaking");
     }
 
     /**
