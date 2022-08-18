@@ -160,7 +160,7 @@ contract LPStaking is BaseContract, ERC20Upgradeable
      * @param durationIndex_ duration index.
      * @dev approve LP before staking.
      */
-    function stake(address paymentAddress_, uint256 paymentAmount_, uint256 durationIndex_) public payable{
+    function stake(address paymentAddress_, uint256 paymentAmount_, uint256 durationIndex_) public {
         if (lpAddress == address(0) || 
             _LPLockReceiver == address(0) || 
             usdcAddress == address(0))
@@ -168,6 +168,81 @@ contract LPStaking is BaseContract, ERC20Upgradeable
 
         require(durationIndex_ <= 3, "Non exist duration!");
         (uint256 _lpAmount_,,) = _buyLP(paymentAddress_, paymentAmount_);
+
+        if (stakers[msg.sender].stakingAmount == 0) totalStakerNum++;
+
+        updateRewardPool();
+
+        if (stakers[msg.sender].stakingAmount > 0) {
+            uint256 _pending_ = pendingReward(msg.sender);
+            //convert _pending_ LP to USDC and transfer
+            uint256 _usdcAmount_ = _sellLP(_pending_);
+            IERC20(usdcAddress).transfer(msg.sender, _usdcAmount_);
+        }
+
+        IERC20(lpAddress).transfer(
+            _LPLockReceiver,
+            _lpAmount_.mul(30).div(1000)
+        );
+
+        uint256 _boosting_lpAmount_;
+        if (durationIndex_ == 0) {
+            _boosting_lpAmount_ = _lpAmount_;
+            stakers[msg.sender].stakingPeriod = 0;
+        }
+
+        if (durationIndex_ == 1) {
+            _boosting_lpAmount_ = _lpAmount_.mul(102).div(100);
+            stakers[msg.sender].stakingPeriod = 30 days;
+        }
+        if (durationIndex_ == 2) {
+            _boosting_lpAmount_ = _lpAmount_.mul(105).div(100);
+            stakers[msg.sender].stakingPeriod = 60 days;
+        }
+        if (durationIndex_ == 3) {
+            _boosting_lpAmount_ = _lpAmount_.mul(110).div(100);
+            stakers[msg.sender].stakingPeriod = 90 days;
+        }
+
+        stakers[msg.sender].stakingAmount = stakers[msg.sender].stakingAmount
+            .add(_lpAmount_.mul(900).div(1000));
+        stakers[msg.sender].boostedAmount = stakers[msg.sender].boostedAmount
+            .add(_boosting_lpAmount_.mul(900).div(1000));
+        stakers[msg.sender].rewardDebt = stakers[msg.sender].boostedAmount
+            .mul(_accLPPerShare)
+            .div(_dividendsPerShareAccuracyFactor);
+        stakers[msg.sender].lastStakingUpdateTime == block.timestamp;
+
+        totalStakingAmount = totalStakingAmount.add(_lpAmount_.mul(900).div(1000));
+        _totalBoostedAmount = _totalBoostedAmount.add(
+            _boosting_lpAmount_.mul(900).div(1000)
+        );
+        _totalReflection = _totalReflection.add(_lpAmount_.mul(20).div(1000));
+        _LPLockAmount = _LPLockAmount.add(_lpAmount_.mul(30).div(1000));
+
+        _distributeReflectionRewards();
+
+        emit Stake(
+            msg.sender,
+            _lpAmount_,
+            stakers[msg.sender].stakingPeriod
+        );
+    }
+
+        /**
+     * stake function
+     * @param paymentAmount_ eth amount
+     * @param durationIndex_ duration index.
+     * @dev approve LP before staking.
+     */
+    function stakeWithEth(uint256 paymentAmount_, uint256 durationIndex_) public payable{
+        if (lpAddress == address(0) || 
+            _LPLockReceiver == address(0) || 
+            usdcAddress == address(0))
+            updateAddresses();
+
+        require(durationIndex_ <= 3, "Non exist duration!");
+        (uint256 _lpAmount_,,) = _buyLPWithEth(paymentAmount_);
 
         if (stakers[msg.sender].stakingAmount == 0) totalStakerNum++;
 
@@ -420,55 +495,79 @@ contract LPStaking is BaseContract, ERC20Upgradeable
         require(address(paymentAddress_) != address(0), "Invalid Address");
         IERC20 _payment_ = IERC20(paymentAddress_);
 
-        if(paymentAddress_ == router.WETH()){
-            require(msg.value >= paymentAmount_, "Invalid amount");
+        require(_payment_.balanceOf(msg.sender) >= paymentAmount_,"Invalid amount");
+        _payment_.transferFrom(msg.sender, address(this), paymentAmount_);
 
-            address[] memory _pathFromEthToUSDC = pathFromTokenToUSDC[paymentAddress_];
-            require(_pathFromEthToUSDC.length >=2, "Don't exist path");
-            uint256 _USDCBalanceBefore_ = _usdc_.balanceOf(address(this));
-            router.swapExactETHForTokensSupportingFeeOnTransferTokens{value: paymentAmount_}(
-                0, 
-                _pathFromEthToUSDC, 
-                address(this), 
-                block.timestamp + 1
-            );
-            uint256 _USDCBalance_ = _usdc_.balanceOf(address(this)) - _USDCBalanceBefore_;
-
-            (lpAmount_, unusedUSDC_, unusedToken_) = _buyLPwithUSDC(_USDCBalance_);
-            return (lpAmount_, unusedUSDC_, unusedToken_);
-
-        }
-        else
-        {
-            require(_payment_.balanceOf(msg.sender) >= paymentAmount_,"Invalid amount");
-            _payment_.transferFrom(msg.sender, address(this), paymentAmount_);
-
-            if (paymentAddress_ == usdcAddress) {
-                (lpAmount_, unusedUSDC_, unusedToken_) = _buyLPwithUSDC(paymentAmount_);
-                return (lpAmount_, unusedUSDC_, unusedToken_);
-            }
-
-            if (paymentAddress_ == tokenAddress) {
-                (lpAmount_, unusedUSDC_, unusedToken_) = _buyLPwithFUR(paymentAmount_);
-                return (lpAmount_, unusedUSDC_, unusedToken_);
-            }
-            
-            address[] memory _pathFromTokenToUSDC = pathFromTokenToUSDC[paymentAddress_];
-            require(_pathFromTokenToUSDC.length >=2, "Don't exist path");
-            _payment_.approve(address(router), paymentAmount_);
-            uint256 _USDCBalanceBefore1_ = _usdc_.balanceOf(address(this));
-            router.swapExactTokensForTokensSupportingFeeOnTransferTokens(
-                paymentAmount_,
-                0, 
-                _pathFromTokenToUSDC, 
-                address(this), 
-                block.timestamp + 1
-            );
-            uint256 _USDCBalance1_ = _usdc_.balanceOf(address(this)) - _USDCBalanceBefore1_;
-
-            (lpAmount_, unusedUSDC_, unusedToken_) = _buyLPwithUSDC(_USDCBalance1_);
+        if (paymentAddress_ == usdcAddress) {
+            (lpAmount_, unusedUSDC_, unusedToken_) = _buyLPwithUSDC(paymentAmount_);
             return (lpAmount_, unusedUSDC_, unusedToken_);
         }
+
+        if (paymentAddress_ == tokenAddress) {
+            (lpAmount_, unusedUSDC_, unusedToken_) = _buyLPwithFUR(paymentAmount_);
+            return (lpAmount_, unusedUSDC_, unusedToken_);
+        }
+        
+        address[] memory _pathFromTokenToUSDC = pathFromTokenToUSDC[paymentAddress_];
+        require(_pathFromTokenToUSDC.length >=2, "Don't exist path");
+        _payment_.approve(address(router), paymentAmount_);
+        uint256 _USDCBalanceBefore1_ = _usdc_.balanceOf(address(this));
+        router.swapExactTokensForTokensSupportingFeeOnTransferTokens(
+            paymentAmount_,
+            0, 
+            _pathFromTokenToUSDC, 
+            address(this), 
+            block.timestamp + 1
+        );
+        uint256 _USDCBalance1_ = _usdc_.balanceOf(address(this)) - _USDCBalanceBefore1_;
+
+        (lpAmount_, unusedUSDC_, unusedToken_) = _buyLPwithUSDC(_USDCBalance1_);
+        return (lpAmount_, unusedUSDC_, unusedToken_);
+    }
+
+    /**
+     * buy LP with eth
+     * @param paymentAmount_ eth amount that user is going to buy LP
+     * @return lpAmount_ LP amount that user received
+     * @return unusedUSDC_ USDC amount that don't used to buy LP
+     * @return unusedToken_ token amount that don't used to buy LP
+     * @dev approve token before buyLP, LP goes to LPStaking contract, unused tokens go to buyer.
+     */
+    function _buyLPWithEth(uint256 paymentAmount_)
+        internal
+        returns (
+            uint256 lpAmount_,
+            uint256 unusedUSDC_,
+            uint256 unusedToken_
+        )
+    {
+
+        if (routerAddress == address(0) || usdcAddress == address(0) || tokenAddress == address(0)) updateAddresses();
+
+        require(routerAddress != address(0), "router address is not set");
+        require(usdcAddress != address(0), "usdc address is not set");
+        require(tokenAddress != address(0), "token address is not set");
+
+        router = IUniswapV2Router02(routerAddress);
+        IERC20 _usdc_ = IERC20(usdcAddress);
+
+        require(msg.value >= paymentAmount_, "Invalid amount");
+
+        address[] memory _path_ = new address[](2);
+        _path_[0] = address(router.WETH());
+        _path_[1] = address(_usdc_);
+        uint256 _USDCBalanceBefore_ = _usdc_.balanceOf(address(this));
+        router.swapExactETHForTokensSupportingFeeOnTransferTokens{value: paymentAmount_}(
+            0, 
+            _path_, 
+            address(this),
+            block.timestamp + 1
+        );
+        uint256 _USDCBalance_ = _usdc_.balanceOf(address(this)) - _USDCBalanceBefore_;
+
+        (lpAmount_, unusedUSDC_, unusedToken_) = _buyLPwithUSDC(_USDCBalance_);
+        return (lpAmount_, unusedUSDC_, unusedToken_);
+
     }
 
     /**
@@ -609,7 +708,7 @@ contract LPStaking is BaseContract, ERC20Upgradeable
      * @return paymentAmount_ USDC amount that user received
      * @dev approve LP before this function calling, usdc goes to LPStaking contract
      */
-    function _sellLP(uint256 lpAmount_) public returns (uint256 paymentAmount_) {
+    function _sellLP(uint256 lpAmount_) internal returns (uint256 paymentAmount_) {
         if (
             routerAddress == address(0) ||
             tokenAddress == address(0) ||
