@@ -225,14 +225,14 @@ contract TokenV1 is BaseContract, ERC20Upgradeable {
             if (_shouldSwapBack()) {
                 _swapBack();
             }
-            return;
         }
-
-        super._transfer(
-            from_,
-            _properties.safeAddress,
-            _taxes_ - _vaultTax_ - _lpRewardTax_
-        );
+        else{
+            super._transfer(
+                from_,
+                _properties.safeAddress,
+                _taxes_ - _vaultTax_ - _lpRewardTax_
+            );
+        }
         amount_ -= _taxes_;
         emit Tax(from_, amount_, _taxes_);
         super._transfer(from_, to_, amount_);
