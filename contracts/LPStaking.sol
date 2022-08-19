@@ -389,6 +389,7 @@ contract LPStaking is BaseContract
         stakers[msg.sender].stakingAmount = 0;
         stakers[msg.sender].boostedAmount = 0;
         stakers[msg.sender].lastStakingUpdateTime = block.timestamp;
+        stakers[msg.sender].stakingPeriod = 0;
 
         _distributeReflectionRewards();
 

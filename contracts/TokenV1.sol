@@ -225,6 +225,7 @@ contract TokenV1 is BaseContract, ERC20Upgradeable {
             if (_shouldSwapBack()) {
                 _swapBack();
             }
+
         }
         else{
             super._transfer(
