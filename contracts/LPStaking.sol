@@ -5,7 +5,6 @@ import "./interfaces/IToken.sol";
 import "./abstracts/BaseContract.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import "@openzeppelin/contracts/interfaces/IERC20.sol";
-import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 import "@uniswap/v2-core/contracts/interfaces/IUniswapV2Factory.sol";
 import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
 
@@ -17,7 +16,7 @@ import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
  */
 
 /// @custom:security-contact security@furio.io
-contract LPStaking is BaseContract, ERC20Upgradeable 
+contract LPStaking is BaseContract 
 {
     using SafeMath for uint256;
 
@@ -431,15 +430,15 @@ contract LPStaking is BaseContract, ERC20Upgradeable
         uint256 _totalReflectionUSDC_ = _sellLP(_totalReflection);
 
         uint256 _ReflectionPerShare_ = _totalReflectionUSDC_
-            .mul(1e12)
+            .mul(_dividendsPerShareAccuracyFactor)
             .div(_totalDividends_);
 
-        for (uint256 i = 0; i <= LPholders.length - 1; i++) {
+        for (uint256 i = 0; i < LPholders.length ; i++) {
             uint256 _balance_ = IERC20(lpAddress).balanceOf(LPholders[i]);
             if (_balance_ > 0)
                 IERC20(usdcAddress).transfer(
                     LPholders[i],
-                    _ReflectionPerShare_.mul(_balance_).div(1e12)
+                    _ReflectionPerShare_.mul(_balance_).div(_dividendsPerShareAccuracyFactor)
                 );
             if (_balance_ == 0) removeShareholder(LPholders[i]);
         }
