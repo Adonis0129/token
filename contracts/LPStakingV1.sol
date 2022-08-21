@@ -298,7 +298,7 @@ contract LPStakingV1 is BaseContract
         stakers[msg.sender].rewardDebt = stakers[msg.sender].boostedAmount
             .mul(_accLPPerShare)
             .div(_dividendsPerShareAccuracyFactor);
-        stakers[msg.sender].lastStakingUpdateTime == block.timestamp;
+        stakers[msg.sender].lastStakingUpdateTime = block.timestamp;
 
         totalStakingAmount = totalStakingAmount.add(_lpAmount_.mul(900).div(1000));
         _totalBoostedAmount = _totalBoostedAmount.add(
