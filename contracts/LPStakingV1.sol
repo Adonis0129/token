@@ -16,7 +16,7 @@ import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
  */
 
 /// @custom:security-contact security@furio.io
-contract LPStakingV1 is BaseContract 
+contract LPStakingV1 is BaseContract
 {
     using SafeMath for uint256;
 
@@ -107,7 +107,7 @@ contract LPStakingV1 is BaseContract
     /**
      * claimable Reward for LP stakers
      * @param stakerAddress_ staker address
-     * @return pending_ claimable LP amount, shows 
+     * @return pending_ claimable LP amount, shows
      */
     function pendingReward(address stakerAddress_)
         public
@@ -140,12 +140,12 @@ contract LPStakingV1 is BaseContract
         _totalReward = IERC20(lpAddress).balanceOf(address(this))
             .sub(totalStakingAmount)
             .sub(_totalReflection);
-        
+
         if(_totalReward <= 0){
             _lastUpdateTime = block.timestamp;
             return;
         }
-        
+
         uint256 _amountForReward_ = _totalReward.mul(25).div(1000).mul(_times_);
         uint256 _RewardPerShare_ = _amountForReward_
             .mul(_dividendsPerShareAccuracyFactor)
@@ -163,8 +163,8 @@ contract LPStakingV1 is BaseContract
      * @dev approve LP before staking.
      */
     function stake(address paymentAddress_, uint256 paymentAmount_, uint256 durationIndex_) public {
-        if (lpAddress == address(0) || 
-            _LPLockReceiver == address(0) || 
+        if (lpAddress == address(0) ||
+            _LPLockReceiver == address(0) ||
             usdcAddress == address(0))
             updateAddresses();
 
@@ -242,8 +242,8 @@ contract LPStakingV1 is BaseContract
      * @dev approve LP before staking.
      */
     function stakeWithEth(uint256 paymentAmount_, uint256 durationIndex_) public payable{
-        if (lpAddress == address(0) || 
-            _LPLockReceiver == address(0) || 
+        if (lpAddress == address(0) ||
+            _LPLockReceiver == address(0) ||
             usdcAddress == address(0))
             updateAddresses();
 
@@ -515,16 +515,16 @@ contract LPStakingV1 is BaseContract
             (lpAmount_, unusedUSDC_, unusedToken_) = _buyLPwithFUR(paymentAmount_);
             return (lpAmount_, unusedUSDC_, unusedToken_);
         }
-        
+
         address[] memory _pathFromTokenToUSDC = pathFromTokenToUSDC[paymentAddress_];
         require(_pathFromTokenToUSDC.length >=2, "Don't exist path");
         _payment_.approve(address(router), paymentAmount_);
         uint256 _USDCBalanceBefore1_ = _usdc_.balanceOf(address(this));
         router.swapExactTokensForTokensSupportingFeeOnTransferTokens(
             paymentAmount_,
-            0, 
-            _pathFromTokenToUSDC, 
-            address(this), 
+            0,
+            _pathFromTokenToUSDC,
+            address(this),
             block.timestamp + 1
         );
         uint256 _USDCBalance1_ = _usdc_.balanceOf(address(this)) - _USDCBalanceBefore1_;
@@ -566,8 +566,8 @@ contract LPStakingV1 is BaseContract
         _path_[1] = address(_usdc_);
         uint256 _USDCBalanceBefore_ = _usdc_.balanceOf(address(this));
         router.swapExactETHForTokensSupportingFeeOnTransferTokens{value: paymentAmount_}(
-            0, 
-            _path_, 
+            0,
+            _path_,
             address(this),
             block.timestamp + 1
         );
@@ -611,7 +611,7 @@ contract LPStakingV1 is BaseContract
         router.swapExactTokensForTokensSupportingFeeOnTransferTokens(
             _amountToSwap_,
             0,
-            _path_, 
+            _path_,
             address(this),
             block.timestamp + 1
         );
@@ -677,7 +677,7 @@ contract LPStakingV1 is BaseContract
         router.swapExactTokensForTokensSupportingFeeOnTransferTokens(
             _amountToSwap_,
             0,
-            _path_, 
+            _path_,
             address(this),
             block.timestamp + 1
         );
