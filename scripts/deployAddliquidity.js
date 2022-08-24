@@ -7,7 +7,8 @@ async function main() {
     const Addliquidity = await ethers.getContractFactory("AddLiquidity");
     const addLiquidity = await upgrades.deployProxy(Addliquidity);
     await addLiquidity.deployed();
-    await addLiquidity.setAddressBook(addressBook);
+    let tx = await addLiquidity.setAddressBook(addressBook);
+    await tx.wait();
     const AddressBook = await ethers.getContractFactory("AddressBook");
     const addressbook = await AddressBook.attach(addressBook);
     await addressbook.set('addLiquidity', addLiquidity.address);

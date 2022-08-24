@@ -24,7 +24,7 @@ contract Pool is BaseContract
     function initialize() initializer public
     {
         __BaseContract_init();
-        _startingPrice = 250; // 2.50 * 100
+        _startingPrice = 800; // 2.50 * 100
     }
 
     /**
