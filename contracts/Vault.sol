@@ -517,11 +517,12 @@ contract Vault is BaseContract
 
     /**
      * 28 Day Claims.
-     * @ return uint256 Amount of claims.
+     * @param participant_ Address of participant.
+     * @return uint256 Amount of claims.
      */
-    function twentyEightDayClaims() external view returns (uint256)
+    function twentyEightDayClaims(address participant_) external view returns (uint256)
     {
-        return _effectiveClaims(msg.sender, 0);
+        return _effectiveClaims(participant_, 0);
     }
 
     /**
