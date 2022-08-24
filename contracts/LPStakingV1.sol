@@ -137,15 +137,15 @@ contract LPStakingV1 is BaseContract
         uint256 _times_ = _deltaTime_.div(24 hours);
         if (_times_ > 40) _times_ = 40;
 
-        uint256 _lpSupply_ = IERC20(lpAddress).balanceOf(address(this));
-        if (_lpSupply_ == 0) {
-            _lastUpdateTime = block.timestamp;
-            return;
-        }
-
         _totalReward = IERC20(lpAddress).balanceOf(address(this))
             .sub(totalStakingAmount)
             .sub(_totalReflection);
+        
+        if(_totalReward <= 0){
+            _lastUpdateTime = block.timestamp;
+            return;
+        }
+        
         uint256 _amountForReward_ = _totalReward.mul(25).div(1000).mul(_times_);
         uint256 _RewardPerShare_ = _amountForReward_
             .mul(_dividendsPerShareAccuracyFactor)

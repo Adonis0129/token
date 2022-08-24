@@ -516,6 +516,15 @@ contract Vault is BaseContract
     }
 
     /**
+     * 28 Day Claims.
+     * @ return uint256 Amount of claims.
+     */
+    function twentyEightDayClaims() external view returns (uint256)
+    {
+        return _effectiveClaims(msg.sender, 0);
+    }
+
+    /**
      * Effective claims.
      * @param participant_ Participant address.
      * @param additional_ Additional claims to add.
@@ -537,8 +546,8 @@ contract Vault is BaseContract
         if(_claims_ > _properties.lookbackPeriods) {
             _claims_ = _properties.lookbackPeriods; // Limit claims to make rate calculation easier.
         }
-        if(_participants[participant_].startTime >= block.timestamp - (_properties.period * _properties.lookbackPeriods) && _claims_ < _properties.neutralClaims) {
-            _claims_ = _properties.neutralClaims; // Before the lookback periods are up, a user can only go up to neutral.
+        if(_participants[participant_].startTime >= block.timestamp - (_properties.period * _properties.lookbackPeriods) && _claims_ < 1) {
+            _claims_ = 1; // Before the lookback periods are up, a user can only go up to neutral.
         }
         if(_participants[participant_].startTime == 0) {
             _claims_ = _properties.neutralClaims; // User hasn't started yet.
@@ -1177,6 +1186,16 @@ contract Vault is BaseContract
     function addToTaxed(address participant_, uint256 amount_) external onlyOwner
     {
         _participants[participant_].taxed += amount_;
+    }
+
+    /**
+     * Set rate.
+     * @param claims_ Number of claims.
+     * @param rate_ New rate.
+     */
+    function setRate(uint256 claims_, uint256 rate_) external onlyOwner
+    {
+        _rates[claims_] = rate_;
     }
 
     /**
