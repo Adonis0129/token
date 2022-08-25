@@ -16,6 +16,8 @@ const main = async () => {
     await tx.wait();
     tx = await addressbook.set("safe", safe);
     await tx.wait();
+    tx = await addressbook.set("lpLockReceiver", safe);
+    await tx.wait();
     // Re instantiate contract with new addressbook
     contract = new Contract(addressbook.address);
     // Deploy Token

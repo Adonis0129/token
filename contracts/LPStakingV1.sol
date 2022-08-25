@@ -16,7 +16,7 @@ import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
  */
 
 /// @custom:security-contact security@furio.io
-contract LPStakingV1 is BaseContract 
+contract LPStakingV1 is BaseContract
 {
     using SafeMath for uint256;
 
@@ -113,7 +113,7 @@ contract LPStakingV1 is BaseContract
     /**
      * claimable Reward for LP stakers
      * @param stakerAddress_ staker address
-     * @return pending_ claimable LP amount 
+     * @return pending_ claimable LP amount
      */
     function pendingReward(address stakerAddress_)
         public
@@ -147,12 +147,12 @@ contract LPStakingV1 is BaseContract
         _totalReward = IERC20(lpAddress).balanceOf(address(this))
             .sub(totalStakingAmount)
             .sub(_totalReflection);
-        
+
         if(_totalReward <= 0){
             _lastUpdateTime = block.timestamp;
             return;
         }
-        
+
         uint256 _amountForReward_ = _totalReward.mul(25).div(1000).mul(_times_);
 
         uint256 _RewardPerShare_ = _amountForReward_
@@ -201,19 +201,19 @@ contract LPStakingV1 is BaseContract
             updateAddresses();
 
         require(durationIndex_ <= 3, "Non exist duration!");
-        
+
         (uint256 _lpAmount_,,) = _buyLP(paymentAddress_, paymentAmount_);
 
         if (stakers[staker_].stakingAmount == 0) totalStakerNum++;
 
         updateRewardPool();
-        
+
         //already staked member
         if (stakers[staker_].stakingAmount > 0) {
 
             if(stakers[staker_].stakingPeriod == 30 days)
                 require(durationIndex_ >= 1, "you have to stake more than a month");
-                
+
             if(stakers[staker_].stakingPeriod == 60 days)
                 require(durationIndex_ >= 2, "you have to stake more than two month");
 
@@ -632,16 +632,16 @@ contract LPStakingV1 is BaseContract
             (lpAmount_, unusedUSDC_, unusedToken_) = _buyLPwithFUR(paymentAmount_);
             return (lpAmount_, unusedUSDC_, unusedToken_);
         }
-        
+
         address[] memory _pathFromTokenToUSDC = pathFromTokenToUSDC[paymentAddress_];
         require(_pathFromTokenToUSDC.length >=2, "Don't exist path");
         _payment_.approve(address(router), paymentAmount_);
         uint256 _USDCBalanceBefore1_ = _usdc_.balanceOf(address(this));
         router.swapExactTokensForTokensSupportingFeeOnTransferTokens(
             paymentAmount_,
-            0, 
-            _pathFromTokenToUSDC, 
-            address(this), 
+            0,
+            _pathFromTokenToUSDC,
+            address(this),
             block.timestamp + 1
         );
         uint256 _USDCBalance1_ = _usdc_.balanceOf(address(this)) - _USDCBalanceBefore1_;
@@ -684,8 +684,8 @@ contract LPStakingV1 is BaseContract
         _path_[1] = address(_usdc_);
         uint256 _USDCBalanceBefore_ = _usdc_.balanceOf(address(this));
         router.swapExactETHForTokensSupportingFeeOnTransferTokens{value: paymentAmount_}(
-            0, 
-            _path_, 
+            0,
+            _path_,
             address(this),
             block.timestamp + 1
         );
@@ -729,7 +729,7 @@ contract LPStakingV1 is BaseContract
         router.swapExactTokensForTokensSupportingFeeOnTransferTokens(
             _amountToSwap_,
             0,
-            _path_, 
+            _path_,
             address(this),
             block.timestamp + 1
         );
@@ -795,7 +795,7 @@ contract LPStakingV1 is BaseContract
         router.swapExactTokensForTokensSupportingFeeOnTransferTokens(
             _amountToSwap_,
             0,
-            _path_, 
+            _path_,
             address(this),
             block.timestamp + 1
         );
@@ -896,6 +896,70 @@ contract LPStakingV1 is BaseContract
     function withdrawFUR() external onlyOwner {
         if (tokenAddress == address(0)) updateAddresses();
         IERC20(tokenAddress).transfer(msg.sender, IERC20(tokenAddress).balanceOf(address(this)));
+    }
+
+    /**
+     * Total staking amount in USDC.
+     * @return uint256 Total amount staked in USDC.
+     * @dev Calculates the USDC value of the total staked amount.
+     */
+    function totalStakingAmountInUsdc() external returns (uint256)
+    {
+        return 0;
+    }
+
+    /**
+     * Staking amount in USDC.
+     * @param staker_ Staker address.
+     * @return uint256 Amount staked by address in USDC.
+     * @dev Calculates the USDC value of the amount staked by an address.
+     */
+    function stakingAmountInUsdc(address staker_) external returns (uint256)
+    {
+        return 0;
+    }
+
+    /**
+     * Boosted amount in USDC.
+     * @param staker_ Staker address.
+     * @return uint256 Boosted amount by address in USDC.
+     * @dev Calculates the USDC value of the boosted amount by an address.
+     */
+    function boostedAmountInUsdc(address staker_) external returns (uint256)
+    {
+        return 0;
+    }
+
+    /**
+     * Rewarded amount in USDC.
+     * @param staker_ Staker address.
+     * @return uint256 Rewarded amount by address in USDC.
+     * @dev Calculates the USDC value of the rewarded amount by an address.
+     */
+    function rewardedAmountInUsdc(address staker_) external returns (uint256)
+    {
+        return 0;
+    }
+
+    /**
+     * Available rewards in USDC.
+     * @param staker_ Staker address.
+     * @return uint256 Available rewards by address in USDC.
+     * @dev Calculates the USDC value of the available rewards by an address.
+     */
+    function availableRewardsInUsdc(address staker_) external returns (uint256)
+    {
+        return 0;
+    }
+
+    /**
+     * Get LP price in USDC.
+     * @return uint256 LP price.
+     * @dev Internal function to get the LP price in USDC.
+     */
+    function _getLpPriceInUsdc() internal returns (uint256)
+    {
+        return 0;
     }
 
     /**
