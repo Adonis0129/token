@@ -16,7 +16,7 @@ import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
  */
 
 /// @custom:security-contact security@furio.io
-contract LPStakingV1 is BaseContract
+contract LPStakingV1 is BaseContract 
 {
     using SafeMath for uint256;
 
@@ -58,7 +58,7 @@ contract LPStakingV1 is BaseContract
     uint256  _dividendsPerShareAccuracyFactor; //1e36
 
     uint256 public totalStakerNum; //total staker number
-    uint256 public totalStakingAmount; //total staker amount
+    uint256 public totalStakingAmount; //total staked LP amount
     uint256  _totalBoostedAmount; //total boosted amount for reward distrubution
     uint256  _totalReward;  //total LP amount for LP reward to LP stakers
     uint256  _totalReflection; //total LP amount to LP reflection to LP holders
@@ -84,13 +84,9 @@ contract LPStakingV1 is BaseContract
      * @dev Updates stored addresses.
      */
     function updateAddresses() public {
-        IUniswapV2Factory _factory_ = IUniswapV2Factory(
-            addressBook.get("factory")
-        );
-        lpAddress = _factory_.getPair(
-            addressBook.get("payment"),
-            addressBook.get("token")
-        );
+
+        IUniswapV2Factory _factory_ = IUniswapV2Factory(addressBook.get("factory"));
+        lpAddress = _factory_.getPair(addressBook.get("payment"), addressBook.get("token"));
         _LPLockReceiver = addressBook.get("lpLockReceiver");
         usdcAddress = addressBook.get("payment");
         routerAddress = addressBook.get("router");
@@ -98,16 +94,26 @@ contract LPStakingV1 is BaseContract
     }
 
     /**
-     * total LP amount holed this contract
+     * Remaining Locked Time.
+     */
+    function getRemainingLockedTime(address stakerAddress) public view returns(uint256){
+
+        if(stakers[stakerAddress].stakingPeriod == 0) return 0;
+        return stakers[stakerAddress].lastStakingUpdateTime + stakers[stakerAddress].stakingPeriod - block.timestamp;
+    }
+
+    /**
+     * total LP amount holded this contract
      */
     function _LPSupply_() external view returns (uint256) {
+
         return IERC20(lpAddress).balanceOf(address(this));
     }
 
     /**
      * claimable Reward for LP stakers
      * @param stakerAddress_ staker address
-     * @return pending_ claimable LP amount, shows
+     * @return pending_ claimable LP amount 
      */
     function pendingReward(address stakerAddress_)
         public
@@ -127,6 +133,7 @@ contract LPStakingV1 is BaseContract
      * @dev update _accLPPerShare
      */
     function updateRewardPool() public {
+
         if (lpAddress == address(0)) updateAddresses();
 
         uint256 _deltaTime_ = block.timestamp - _lastUpdateTime;
@@ -140,16 +147,18 @@ contract LPStakingV1 is BaseContract
         _totalReward = IERC20(lpAddress).balanceOf(address(this))
             .sub(totalStakingAmount)
             .sub(_totalReflection);
-
+        
         if(_totalReward <= 0){
             _lastUpdateTime = block.timestamp;
             return;
         }
-
+        
         uint256 _amountForReward_ = _totalReward.mul(25).div(1000).mul(_times_);
+
         uint256 _RewardPerShare_ = _amountForReward_
             .mul(_dividendsPerShareAccuracyFactor)
             .div(_totalBoostedAmount);
+
         _accLPPerShare = _accLPPerShare.add(_RewardPerShare_);
 
         _totalReward = _totalReward.sub(_amountForReward_);
@@ -187,29 +196,36 @@ contract LPStakingV1 is BaseContract
      * @param staker_ Staker address.
      */
     function _stake(address paymentAddress_, uint256 paymentAmount_, uint256 durationIndex_, address staker_) internal {
-        if (lpAddress == address(0) ||
-            _LPLockReceiver == address(0) ||
-            usdcAddress == address(0))
+
+        if (lpAddress == address(0) || _LPLockReceiver == address(0) || usdcAddress == address(0))
             updateAddresses();
 
         require(durationIndex_ <= 3, "Non exist duration!");
+        
         (uint256 _lpAmount_,,) = _buyLP(paymentAddress_, paymentAmount_);
 
         if (stakers[staker_].stakingAmount == 0) totalStakerNum++;
 
         updateRewardPool();
-
+        
+        //already staked member
         if (stakers[staker_].stakingAmount > 0) {
+
             if(stakers[staker_].stakingPeriod == 30 days)
                 require(durationIndex_ >= 1, "you have to stake more than a month");
+                
             if(stakers[staker_].stakingPeriod == 60 days)
                 require(durationIndex_ >= 2, "you have to stake more than two month");
+
             if(stakers[staker_].stakingPeriod == 90 days)
                 require(durationIndex_ == 3, "you have to stake during three month");
 
             uint256 _pending_ = pendingReward(staker_);
-            uint256 _usdcAmount_ = _sellLP(_pending_);
-            IERC20(usdcAddress).transfer(staker_, _usdcAmount_);
+            if(_pending_ > 0){
+                uint256 _usdcAmount_ = _sellLP(_pending_);
+                IERC20(usdcAddress).transfer(staker_, _usdcAmount_);
+            }
+
         }
 
         IERC20(lpAddress).transfer(
@@ -238,11 +254,14 @@ contract LPStakingV1 is BaseContract
 
         stakers[staker_].stakingAmount = stakers[staker_].stakingAmount
             .add(_lpAmount_.mul(900).div(1000));
+
         stakers[staker_].boostedAmount = stakers[staker_].boostedAmount
             .add(_boosting_lpAmount_.mul(900).div(1000));
+
         stakers[staker_].rewardDebt = stakers[staker_].boostedAmount
             .mul(_accLPPerShare)
             .div(_dividendsPerShareAccuracyFactor);
+
         stakers[staker_].lastStakingUpdateTime = block.timestamp;
 
         totalStakingAmount = totalStakingAmount.add(_lpAmount_.mul(900).div(1000));
@@ -259,16 +278,15 @@ contract LPStakingV1 is BaseContract
         );
     }
 
-        /**
+    /**
      * stake function
      * @param paymentAmount_ eth amount
      * @param durationIndex_ duration index.
      * @dev approve LP before staking.
      */
     function stakeWithEth(uint256 paymentAmount_, uint256 durationIndex_) public payable{
-        if (lpAddress == address(0) ||
-            _LPLockReceiver == address(0) ||
-            usdcAddress == address(0))
+
+        if (lpAddress == address(0) || _LPLockReceiver == address(0) || usdcAddress == address(0))
             updateAddresses();
 
         require(durationIndex_ <= 3, "Non exist duration!");
@@ -278,17 +296,23 @@ contract LPStakingV1 is BaseContract
 
         updateRewardPool();
 
+        //already staked member
         if (stakers[msg.sender].stakingAmount > 0) {
+
             if(stakers[msg.sender].stakingPeriod == 30 days)
                 require(durationIndex_ >= 1, "you have to stake more than a month");
+
             if(stakers[msg.sender].stakingPeriod == 60 days)
                 require(durationIndex_ >= 2, "you have to stake more than two month");
+
             if(stakers[msg.sender].stakingPeriod == 90 days)
                 require(durationIndex_ == 3, "you have to stake during three month");
 
             uint256 _pending_ = pendingReward(msg.sender);
-            uint256 _usdcAmount_ = _sellLP(_pending_);
-            IERC20(usdcAddress).transfer(msg.sender, _usdcAmount_);
+            if(_pending_ > 0){
+                uint256 _usdcAmount_ = _sellLP(_pending_);
+                IERC20(usdcAddress).transfer(msg.sender, _usdcAmount_);
+            }
         }
 
         IERC20(lpAddress).transfer(
@@ -317,11 +341,14 @@ contract LPStakingV1 is BaseContract
 
         stakers[msg.sender].stakingAmount = stakers[msg.sender].stakingAmount
             .add(_lpAmount_.mul(900).div(1000));
+
         stakers[msg.sender].boostedAmount = stakers[msg.sender].boostedAmount
             .add(_boosting_lpAmount_.mul(900).div(1000));
+
         stakers[msg.sender].rewardDebt = stakers[msg.sender].boostedAmount
             .mul(_accLPPerShare)
             .div(_dividendsPerShareAccuracyFactor);
+
         stakers[msg.sender].lastStakingUpdateTime = block.timestamp;
 
         totalStakingAmount = totalStakingAmount.add(_lpAmount_.mul(900).div(1000));
@@ -343,14 +370,13 @@ contract LPStakingV1 is BaseContract
      @notice stakers can claim every 24 hours and receive it with USDC.
      */
     function claimRewards() public {
+
         if (lpAddress == address(0)) updateAddresses();
 
         if (stakers[msg.sender].stakingAmount <= 0) return;
 
         uint256 _pending_ = pendingReward(msg.sender);
-
         if (_pending_ == 0) return;
-        //convert _pending_ LP to USDC and transfer
         uint256 _usdcAmount_ = _sellLP(_pending_);
         IERC20(usdcAddress).transfer(msg.sender, _usdcAmount_);
 
@@ -368,8 +394,10 @@ contract LPStakingV1 is BaseContract
      @notice stakers restake claimable LP every 24 hours without staking fee.
      */
     function compound() public {
+
         if (lpAddress == address(0)) updateAddresses();
         if (stakers[msg.sender].stakingAmount <= 0) return;
+
         uint256 _pending_ = pendingReward(msg.sender);
         if (_pending_ == 0) return;
 
@@ -394,6 +422,7 @@ contract LPStakingV1 is BaseContract
      @notice stakers have to claim rewards before finishing stake.
      */
     function unstake() public {
+
         if (lpAddress == address(0) || _LPLockReceiver == address(0))
             updateAddresses();
 
@@ -406,7 +435,13 @@ contract LPStakingV1 is BaseContract
 
         updateRewardPool();
 
-        //convert LP to USDC and transfer
+        uint256 _pending_ = pendingReward(msg.sender);
+        if(_pending_ > 0)
+        {
+            uint256 _Pendingusdc_ = _sellLP(_pending_);
+            IERC20(usdcAddress).transfer(msg.sender, _Pendingusdc_);
+        }
+
         uint256 _usdcAmount_ = _sellLP(_lpAmount_.mul(900).div(1000));
         IERC20(usdcAddress).transfer(msg.sender, _usdcAmount_);
         IERC20(lpAddress).transfer(_LPLockReceiver, _lpAmount_.mul(30).div(1000));
@@ -430,10 +465,63 @@ contract LPStakingV1 is BaseContract
     }
 
     /**
+     * reset staking duration function
+     * @param durationIndex_ duration index.
+     */
+    function resetStakingPeriod(uint256 durationIndex_) public {
+
+        require(durationIndex_ <= 3, "Non exist duration!");
+        require (stakers[msg.sender].stakingAmount > 0, "Don't exist staked amount!");
+
+        updateRewardPool();
+        if(durationIndex_ == 0) return;
+        if(stakers[msg.sender].stakingPeriod == 30 days)
+            require(durationIndex_ >= 1, "you have to stake more than a month");
+        if(stakers[msg.sender].stakingPeriod == 60 days)
+            require(durationIndex_ >= 2, "you have to stake more than two month");
+        if(stakers[msg.sender].stakingPeriod == 90 days)
+            require(durationIndex_ == 3, "you have to stake during three month");
+
+        uint256 _pending_ = pendingReward(msg.sender);
+        if(_pending_ > 0){
+            uint256 _usdcAmount_ = _sellLP(_pending_);
+            IERC20(usdcAddress).transfer(msg.sender, _usdcAmount_);
+        }
+
+        uint256 _boosting_lpAmount_;
+        if (durationIndex_ == 1) {
+            _boosting_lpAmount_ = stakers[msg.sender].stakingAmount.mul(102).div(100);
+            stakers[msg.sender].stakingPeriod = 30 days;
+        }
+        if (durationIndex_ == 2) {
+            _boosting_lpAmount_ = stakers[msg.sender].stakingAmount.mul(105).div(100);
+            stakers[msg.sender].stakingPeriod = 60 days;
+        }
+        if (durationIndex_ == 3) {
+            _boosting_lpAmount_ = stakers[msg.sender].stakingAmount.mul(110).div(100);
+            stakers[msg.sender].stakingPeriod = 90 days;
+        }
+
+
+        stakers[msg.sender].boostedAmount = _boosting_lpAmount_;
+        stakers[msg.sender].rewardDebt = stakers[msg.sender].boostedAmount
+            .mul(_accLPPerShare)
+            .div(_dividendsPerShareAccuracyFactor);
+        stakers[msg.sender].lastStakingUpdateTime = block.timestamp;
+
+        emit Stake(
+            msg.sender,
+            stakers[msg.sender].stakingAmount,
+            stakers[msg.sender].stakingPeriod
+        );
+    }
+
+    /**
      * register LP holders address
      @notice LP holders have to register their address to get LP reflection.
      */
     function registerAddress() public {
+
         if (_LPLockReceiver == address(0)) updateAddresses();
         if (msg.sender == _LPLockReceiver) return;
         _LPholderIndexes[msg.sender] = LPholders.length;
@@ -444,6 +532,7 @@ contract LPStakingV1 is BaseContract
      * remove LP holders address
      */
     function removeShareholder(address _holder) public {
+
         LPholders[_LPholderIndexes[_holder]] = LPholders[LPholders.length - 1];
         _LPholderIndexes[LPholders[LPholders.length - 1]] = _LPholderIndexes[_holder];
         LPholders.pop();
@@ -454,13 +543,16 @@ contract LPStakingV1 is BaseContract
       *@notice give rewards with USDC
      */
     function _distributeReflectionRewards() internal {
+
         if (lpAddress == address(0)) updateAddresses();
-        uint256 _totalDividends_ = IERC20(lpAddress).totalSupply()
-            .sub(totalStakingAmount)
-            .sub(IERC20(lpAddress).balanceOf(_LPLockReceiver));
+        if (_totalReflection <= 0) return;
 
         //convert LP to USDC
         uint256 _totalReflectionUSDC_ = _sellLP(_totalReflection);
+
+        uint256 _totalDividends_ = IERC20(lpAddress).totalSupply()
+            .sub(totalStakingAmount)
+            .sub(IERC20(lpAddress).balanceOf(_LPLockReceiver));
 
         uint256 _ReflectionPerShare_ = _totalReflectionUSDC_
             .mul(_dividendsPerShareAccuracyFactor)
@@ -527,7 +619,8 @@ contract LPStakingV1 is BaseContract
         require(address(paymentAddress_) != address(0), "Invalid Address");
         IERC20 _payment_ = IERC20(paymentAddress_);
 
-        require(_payment_.balanceOf(msg.sender) >= paymentAmount_,"Invalid amount");
+        require(paymentAmount_ > 0, "Invalid amount");
+        require(_payment_.balanceOf(msg.sender) >= paymentAmount_,"insufficient amount");
         _payment_.transferFrom(msg.sender, address(this), paymentAmount_);
 
         if (paymentAddress_ == usdcAddress) {
@@ -539,16 +632,16 @@ contract LPStakingV1 is BaseContract
             (lpAmount_, unusedUSDC_, unusedToken_) = _buyLPwithFUR(paymentAmount_);
             return (lpAmount_, unusedUSDC_, unusedToken_);
         }
-
+        
         address[] memory _pathFromTokenToUSDC = pathFromTokenToUSDC[paymentAddress_];
         require(_pathFromTokenToUSDC.length >=2, "Don't exist path");
         _payment_.approve(address(router), paymentAmount_);
         uint256 _USDCBalanceBefore1_ = _usdc_.balanceOf(address(this));
         router.swapExactTokensForTokensSupportingFeeOnTransferTokens(
             paymentAmount_,
-            0,
-            _pathFromTokenToUSDC,
-            address(this),
+            0, 
+            _pathFromTokenToUSDC, 
+            address(this), 
             block.timestamp + 1
         );
         uint256 _USDCBalance1_ = _usdc_.balanceOf(address(this)) - _USDCBalanceBefore1_;
@@ -583,15 +676,16 @@ contract LPStakingV1 is BaseContract
         router = IUniswapV2Router02(routerAddress);
         IERC20 _usdc_ = IERC20(usdcAddress);
 
-        require(msg.value >= paymentAmount_, "Invalid amount");
+        require(paymentAmount_ > 0, "Invalid amount");
+        require(msg.value >= paymentAmount_, "insufficient amount");
 
         address[] memory _path_ = new address[](2);
         _path_[0] = address(router.WETH());
         _path_[1] = address(_usdc_);
         uint256 _USDCBalanceBefore_ = _usdc_.balanceOf(address(this));
         router.swapExactETHForTokensSupportingFeeOnTransferTokens{value: paymentAmount_}(
-            0,
-            _path_,
+            0, 
+            _path_, 
             address(this),
             block.timestamp + 1
         );
@@ -635,7 +729,7 @@ contract LPStakingV1 is BaseContract
         router.swapExactTokensForTokensSupportingFeeOnTransferTokens(
             _amountToSwap_,
             0,
-            _path_,
+            _path_, 
             address(this),
             block.timestamp + 1
         );
@@ -701,7 +795,7 @@ contract LPStakingV1 is BaseContract
         router.swapExactTokensForTokensSupportingFeeOnTransferTokens(
             _amountToSwap_,
             0,
-            _path_,
+            _path_, 
             address(this),
             block.timestamp + 1
         );
