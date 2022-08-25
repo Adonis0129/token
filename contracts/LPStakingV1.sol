@@ -158,30 +158,30 @@ contract LPStakingV1 is BaseContract
 
     /**
      * Stake for.
-     * @param paymentAddresS_ Payment token address.
+     * @param paymentAddress_ Payment token address.
      * @param paymentAmount_ Amount to stake.
      * @param durationIndex_ Duration index.
      * @param staker_ Staker address.
      */
     function stakeFor(address paymentAddress_, uint256 paymentAmount_, uint256 durationIndex_, address staker_) external
     {
-        return _stake(paymentAddress_, paymentAmount_, durationIndex_, staker_);
+        _stake(paymentAddress_, paymentAmount_, durationIndex_, staker_);
     }
 
     /**
      * Stake.
-     * @param paymentAddresS_ Payment token address.
+     * @param paymentAddress_ Payment token address.
      * @param paymentAmount_ Amount to stake.
      * @param durationIndex_ Duration index.
      */
     function stake(address paymentAddress_, uint256 paymentAmount_, uint256 durationIndex_) external
     {
-        return _stake(paymentAddress_, paymentAmount_, durationIndex_, msg.sender);
+        _stake(paymentAddress_, paymentAmount_, durationIndex_, msg.sender);
     }
 
     /**
      * Internal stake.
-     * @param paymentAddresS_ Payment token address.
+     * @param paymentAddress_ Payment token address.
      * @param paymentAmount_ Amount to stake.
      * @param durationIndex_ Duration index.
      * @param staker_ Staker address.

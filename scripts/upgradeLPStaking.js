@@ -7,8 +7,6 @@ async function main() {
     const AddressBook = await ethers.getContractFactory("AddressBook");
     const addressbook = await AddressBook.attach(addressBook);
     const lpStakingAddress = await addressbook.get("lpStaking");
-    const LPStaking = await ethers.getContractFactory("LPStaking");
-    await upgrades.forceImport(lpStakingAddress, LPStaking);
     const LPStakingV1 = await ethers.getContractFactory("LPStakingV1");
     await upgrades.upgradeProxy(lpStakingAddress, LPStakingV1);
     console.log("LPStaking contract upgraded", lpStakingAddress);

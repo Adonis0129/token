@@ -362,8 +362,9 @@ contract Vault is BaseContract
 
     /**
      * Claim bonus.
+     * @return bool True if successful.
      */
-    function claimBonus() external
+    function claimBonus() external returns (bool)
     {
         require(_bonusPeriod > 0, "Bonus claim not initialized");
         require(bonusAvailable(), "Bonus not available");
@@ -399,7 +400,7 @@ contract Vault is BaseContract
             emit Complete(msg.sender);
         }
         // Calculate tax amount.
-        uint256 _taxAmount_ = _amount_ * taxRate_ / 10000;
+        uint256 _taxAmount_ = _amount_ * _properties.claimTax / 10000;
         if(_taxAmount_ > 0) {
             _amount_ -= _taxAmount_;
             // Update contract tax stats.
@@ -429,8 +430,8 @@ contract Vault is BaseContract
             _token_.mint(address(this), _amount_ - _balance_);
         }
         ILPStakingV1 _staking_ = ILPStakingV1(_lpStakingAddress_);
-        _token_.approve(_staking_.address, _amount_);
-        _staking_.stakeFor(_token_.address, _amount_, 3, msg.sender);
+        _token_.approve(address(_staking_), _amount_);
+        _staking_.stakeFor(address(_token_), _amount_, 3, msg.sender);
         return true;
     }
 
