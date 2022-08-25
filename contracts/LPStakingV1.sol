@@ -7,6 +7,7 @@ import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import "@openzeppelin/contracts/interfaces/IERC20.sol";
 import "@uniswap/v2-core/contracts/interfaces/IUniswapV2Factory.sol";
 import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
+import "@uniswap/v2-core/contracts/interfaces/IUniswapV2Pair.sol";
 
 
 /**
@@ -36,11 +37,11 @@ contract LPStakingV1 is BaseContract
      * Staker struct.
      */
     struct Staker {
-        uint256 stakingAmount;
-        uint256 boostedAmount;
-        uint256 rewardDebt;
-        uint256 lastStakingUpdateTime;
-        uint256 stakingPeriod;
+        uint256 stakingAmount; //staking LP amount
+        uint256 boostedAmount; //boosted staking LP amount
+        uint256 rewardDebt; //rewardDebt LP amount
+        uint256 lastStakingUpdateTime;  //last staking update time
+        uint256 stakingPeriod; //staking period
     }
     /**
      * variables
@@ -898,68 +899,39 @@ contract LPStakingV1 is BaseContract
         IERC20(tokenAddress).transfer(msg.sender, IERC20(tokenAddress).balanceOf(address(this)));
     }
 
-    /**
-     * Total staking amount in USDC.
-     * @return uint256 Total amount staked in USDC.
-     * @dev Calculates the USDC value of the total staked amount.
-     */
-    function totalStakingAmountInUsdc() external returns (uint256)
-    {
-        return 0;
+    //////////////////////////////////////////
+    ////////////// View Functions ////////////
+    //////////////////////////////////////////
+
+    function _getLpPriceInUsdc(uint256 lpAmount) internal view returns (uint256){
+        IUniswapV2Pair LPToken = IUniswapV2Pair(lpAddress);
+        (, uint256 reserveUSDC, ) = LPToken.getReserves();
+        uint256 LpPriceInUsdc = lpAmount * 2 * reserveUSDC / LPToken.totalSupply();
+        return LpPriceInUsdc;
     }
 
-    /**
-     * Staking amount in USDC.
-     * @param staker_ Staker address.
-     * @return uint256 Amount staked by address in USDC.
-     * @dev Calculates the USDC value of the amount staked by an address.
-     */
-    function stakingAmountInUsdc(address staker_) external returns (uint256)
-    {
-        return 0;
+    function totalStakingAmountInUsdc() public view returns (uint256){
+        return _getLpPriceInUsdc(totalStakingAmount);
     }
 
-    /**
-     * Boosted amount in USDC.
-     * @param staker_ Staker address.
-     * @return uint256 Boosted amount by address in USDC.
-     * @dev Calculates the USDC value of the boosted amount by an address.
-     */
-    function boostedAmountInUsdc(address staker_) external returns (uint256)
-    {
-        return 0;
+    function stakingAmountInUsdc(address staker_) public view returns (uint256){
+        return _getLpPriceInUsdc(stakers[staker_].stakingAmount);
     }
 
-    /**
-     * Rewarded amount in USDC.
-     * @param staker_ Staker address.
-     * @return uint256 Rewarded amount by address in USDC.
-     * @dev Calculates the USDC value of the rewarded amount by an address.
-     */
-    function rewardedAmountInUsdc(address staker_) external returns (uint256)
-    {
-        return 0;
+    function boostedAmountInUsdc(address staker_) public view returns (uint256){
+        return _getLpPriceInUsdc(stakers[staker_].boostedAmount);
     }
 
-    /**
-     * Available rewards in USDC.
-     * @param staker_ Staker address.
-     * @return uint256 Available rewards by address in USDC.
-     * @dev Calculates the USDC value of the available rewards by an address.
-     */
-    function availableRewardsInUsdc(address staker_) external returns (uint256)
-    {
-        return 0;
+    function totalRewardableAmountInUsdc() public view returns (uint256){
+        uint256 _totalReward_ = IERC20(lpAddress).balanceOf(address(this))
+            .sub(totalStakingAmount)
+            .sub(_totalReflection);
+        return _getLpPriceInUsdc(_totalReward_);
     }
 
-    /**
-     * Get LP price in USDC.
-     * @return uint256 LP price.
-     * @dev Internal function to get the LP price in USDC.
-     */
-    function _getLpPriceInUsdc() internal returns (uint256)
-    {
-        return 0;
+    function availableRewardsInUsdc(address staker_) public view returns (uint256){
+        uint256 _pending_ =  pendingReward(staker_);
+        return _getLpPriceInUsdc(_pending_);
     }
 
     /**
