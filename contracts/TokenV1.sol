@@ -4,6 +4,7 @@ pragma solidity ^0.8.4;
 import "./abstracts/BaseContract.sol";
 import "./interfaces/IVault.sol";
 import "./interfaces/IAddLiquidity.sol";
+import "./interfaces/ILiquidityManager.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 import "@openzeppelin/contracts/interfaces/IERC20.sol";
 import "@uniswap/v2-core/contracts/interfaces/IUniswapV2Factory.sol";
@@ -68,6 +69,11 @@ contract TokenV1 is BaseContract, ERC20Upgradeable {
     uint256 private _lastAddLiquidityTime;
     address _addLiquidityAddress; //addLiquidity Contract address
     address _lpStakingAddress; // LPStaking contract address
+
+    address _lmsAddress; // Liquidity manager address
+    bool _restrictSwaps; // Restrict swaps from LP
+    ILiquidityManager _lms; // Liquidity manager
+    mapping(address => bool) private _addressClearedForSwap; // Addresses that can swap
 
     /**
      * Event.
@@ -383,6 +389,43 @@ contract TokenV1 is BaseContract, ERC20Upgradeable {
         _properties.safeAddress = addressBook.get("safe");
         _addLiquidityAddress = addressBook.get("addLiquidity");
         _lpStakingAddress = addressBook.get("lpStaking");
+        _lmsAddress = addressBook.get("lms");
+        _lms = ILiquidityManager(_lmsAddress);
+        _addressClearedForSwap[_properties.swapAddress] = true;
+        _addressClearedForSwap[_lpStakingAddress] = true;
+        _addressClearedForSwap[_lmsAddress] = true;
+    }
+
+    /**
+     * Enable liquidity manager.
+     */
+    function enableLiquidityManager() external onlyOwner
+    {
+        _restrictSwaps = true;
+        _lms.enableLiquidityManager(true);
+    }
+
+    /**
+     * Disable liquidity manager.
+     */
+    function disableLiquidityManager() external onlyOwner
+    {
+        _restrictSwaps = false;
+        _lms.enableLiquidityManager(false);
+    }
+
+    function swapUsdcForToken(uint256 amountIn, uint256 amountOutMin) external
+    {
+        _addressClearedForSwap[msg.sender] = true;
+        _lms.swapUsdcForToken(msg.sender, amountIn, amountOutMin);
+        _addressClearedForSwap[msg.sender] = false;
+    }
+
+    function swapTokenForUsdc(uint256 amountIn, uint256 amountOutMin) external
+    {
+        _addressClearedForSwap[msg.sender] = true;
+        _lms.swapTokenForUsdc(msg.sender, amountIn, amountOutMin);
+        _addressClearedForSwap[msg.sender] = false;
     }
 
     /**
@@ -398,7 +441,16 @@ contract TokenV1 is BaseContract, ERC20Upgradeable {
         address from,
         address to,
         uint256 amount
-    ) internal override whenNotPaused {}
+    ) internal override whenNotPaused {
+        if(_restrictSwaps) {
+            if(from == _properties.lpAddress) {
+                require(_addressClearedForSwap[to], "Unable to swap directly from liquidity pool");
+            }
+            if(to == _properties.lpAddress) {
+                require(_addressClearedForSwap[from], "Unable to swap directly from liquidity pool");
+            }
+        }
+    }
 
     function _afterTokenTransfer(
         address from,

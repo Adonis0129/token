@@ -151,8 +151,6 @@ contract Vault is BaseContract
     Properties private _properties;
     mapping(uint256 => uint256) private _rates; // Mapping of claims to rates.
     mapping(address => address) private _lastRewarded; // Mapping of last addresses rewarded in an upline.
-    mapping(address => uint256) private _lastBonusClaim; // Mapping of address to last bonus claim.
-    uint256 private _bonusPeriod; // Period for bonus claim.
 
     /**
      * Events.
@@ -353,86 +351,12 @@ contract Vault is BaseContract
 
     /**
      * Bonus available.
+     * @param participant_ Participant address.
      * @return bool True if bonus is available.
      */
-    function bonusAvailable() public view returns (bool)
+    function bonusAvailable(address participant_) public view returns (bool)
     {
-        return _bonusPeriod > 0 && _lastBonusClaim[msg.sender] <= block.timestamp - _bonusPeriod;
-    }
-
-    /**
-     * Claim bonus.
-     * @return bool True if successful.
-     */
-    function claimBonus() external returns (bool)
-    {
-        require(_bonusPeriod > 0, "Bonus claim not initialized");
-        require(bonusAvailable(), "Bonus not available");
-        // Get some data that will be used a bunch.
-        uint256 _timestamp_ = block.timestamp;
-        uint256 _amount_ = _availableRewards(msg.sender);
-        uint256 _maxPayout_ = _maxPayout(msg.sender);
-        address _lpStakingAddress_ = addressBook.get("lpStaking");
-        _addReferrer(msg.sender, address(0));
-        // Checks.
-        require(_amount_ > 0, "Invalid claim amount");
-        require(!_participants[msg.sender].banned, "Participant is banned");
-        require(!_participants[msg.sender].complete, "Participant is complete");
-        require(_participants[msg.sender].claimed < _maxPayout_, "Maximum payout has been reached");
-        require(_lpStakingAddress_ != address(0), "LP staking address not set");
-        // Keep total under max payout.
-        if(_participants[msg.sender].claimed + _amount_ > _maxPayout_) {
-            _amount_ = _maxPayout_ - _participants[msg.sender].claimed;
-        }
-        // Update participant available rewards.
-        _participants[msg.sender].availableRewards = 0;
-        _participants[msg.sender].lastRewardUpdate = _timestamp_;
-        // Update contract claim stats.
-        _stats.totalClaims ++;
-        _stats.totalClaimed += _amount_;
-        // Update participant claim stats.
-        _participants[msg.sender].claimed += _amount_;
-        // Emit Claim event.
-        emit Claim(msg.sender, _amount_);
-        // Check if participant is finished.
-        if(_participants[msg.sender].claimed >= _properties.maxPayout) {
-            _participants[msg.sender].complete = true;
-            emit Complete(msg.sender);
-        }
-        // Calculate tax amount.
-        uint256 _taxAmount_ = _amount_ * _properties.claimTax / 10000;
-        if(_taxAmount_ > 0) {
-            _amount_ -= _taxAmount_;
-            // Update contract tax stats.
-            _stats.totalTaxed ++;
-            _stats.totalTaxes += _taxAmount_;
-            // Update participant tax stats
-            _participants[msg.sender].taxed += _taxAmount_;
-            // Emit Tax event.
-            emit Tax(msg.sender, _taxAmount_);
-        }
-        // Calculate whale tax.
-        uint256 _whaleTax_ = _amount_ * _whaleTax(msg.sender) / 10000;
-        if(_whaleTax_ > 0) {
-            _amount_ -= _whaleTax_;
-            // Update contract tax stats.
-            _stats.totalTaxed ++;
-            _stats.totalTaxes += _whaleTax_;
-            // Update participant tax stats
-            _participants[msg.sender].taxed += _whaleTax_;
-            // Emit Tax event.
-            emit Tax(msg.sender, _taxAmount_);
-        }
-
-        IToken _token_ = _token();
-        uint256 _balance_ = _token_.balanceOf(address(this));
-        if(_balance_ < _amount_) {
-            _token_.mint(address(this), _amount_ - _balance_);
-        }
-        ILPStakingV1 _staking_ = ILPStakingV1(_lpStakingAddress_);
-        _token_.approve(address(_staking_), _amount_);
-        _staking_.stakeFor(address(_token_), _amount_, 3, msg.sender);
-        return true;
+        return _bonusPeriod > 0 && _availableRewards(participant_) > 0 && _lastBonusClaim[participant_] <= block.timestamp - _bonusPeriod;
     }
 
     /**
@@ -530,22 +454,44 @@ contract Vault is BaseContract
      * -------------------------------------------------------------------------
      */
 
+    function claimBonus() external returns (bool)
+    {
+        require(_bonusPeriod > 0, "Bonus claim not initialized");
+        require(bonusAvailable(msg.sender), "Bonus not available");
+        address _lpStakingAddress_ = addressBook.get("lpStaking");
+        require(_lpStakingAddress_ != address(0), "LP Staking address not set");
+        _lastBonusClaim[msg.sender] = block.timestamp;
+        uint256 _amount_ = _claim(msg.sender, _properties.claimTax, false);
+        IToken _token_ = _token();
+        uint256 _balance_ = _token_.balanceOf(address(this));
+        if(_balance_ < _amount_) {
+            _token_.mint(address(this), _amount_ - _balance_);
+        }
+        ILPStakingV1 _staking_ = ILPStakingV1(_lpStakingAddress_);
+        _token_.approve(address(_staking_), _amount_);
+        _staking_.stakeFor(address(_token_), _amount_, 3, msg.sender);
+        return true;
+    }
+
     /**
      * Claim.
      * @return bool True if successful.
      */
     function claim() external returns (bool)
     {
-        return _claim(msg.sender, _properties.claimTax);
+        uint256 _amount_ = _claim(msg.sender, _properties.claimTax, true);
+        _sendTokens(msg.sender, _amount_);
+        return true;
     }
 
     /**
      * Claim.
      * @param participant_ Address of participant.
      * @param taxRate_ Tax rate.
-     * @return bool True if successful.
+     * @param addToClaims_ True if should be added to claims.
+     * @return uint256 Amount of claim.
      */
-    function _claim(address participant_, uint256 taxRate_) internal returns (bool)
+    function _claim(address participant_, uint256 taxRate_, bool addToClaims_) internal returns (uint256)
     {
         // Get some data that will be used a bunch.
         uint256 _timestamp_ = block.timestamp;
@@ -562,17 +508,11 @@ contract Vault is BaseContract
             _amount_ = _maxPayout_ - _participants[participant_].claimed;
         }
         // Check penalty claims
-        if(_penaltyClaims(participant_) + 1 >= _properties.penaltyClaims) {
-            // User is penalized
-            _participants[participant_].penalized = true;
-        }
-        // Check effective claims
-        if(_effectiveClaims(participant_, 1) >= _properties.negativeClaims) {
-            // User is negative
-            _participants[participant_].negative = true;
-        }
+        if(_penaltyClaims(participant_) + 1 >= _properties.penaltyClaims) _participants[participant_].penalized = true;
+        // Undo any negative participants...
+        if(_participants[participant_].negative) _participants[participant_].negative = false;
         // Update the claims mapping.
-        _claims[participant_].push(_timestamp_);
+        if(addToClaims_) _claims[participant_].push(_timestamp_);
         // Update participant available rewards.
         _participants[participant_].availableRewards = 0;
         _participants[participant_].lastRewardUpdate = _timestamp_;
@@ -612,9 +552,8 @@ contract Vault is BaseContract
             // Emit Tax event.
             emit Tax(participant_, _taxAmount_);
         }
-        // Pay the participant
-        _sendTokens(participant_, _amount_);
-        return true;
+        // Return amount.
+        return _amount_;
     }
 
     /**
@@ -1307,4 +1246,7 @@ contract Vault is BaseContract
      * See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
      */
     uint256[45] private __gap;
+
+    mapping(address => uint256) private _lastBonusClaim; // Mapping of address to last bonus claim.
+    uint256 private _bonusPeriod; // Period for bonus claim.
 }

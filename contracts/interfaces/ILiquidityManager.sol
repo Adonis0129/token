@@ -3,17 +3,17 @@ pragma solidity ^0.8.4;
 
 interface ILiquidityManager {
     function rebalance(uint256 amount, bool buyback) external;
-    function swapBusdForToken(
+    function swapUsdcForToken(
         address to,
         uint256 amountIn,
         uint256 amountOutMin
     ) external;
-    function swapTokenForBusd(
+    function swapTokenForUsdc(
         address to,
         uint256 amountIn,
         uint256 amountOutMin
     ) external;
-    function swapTokenForBusdToWallet(
+    function swapTokenForUsdcToWallet(
         address from,
         address destination,
         uint256 tokenAmount,

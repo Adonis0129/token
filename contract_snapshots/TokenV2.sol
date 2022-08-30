@@ -440,11 +440,11 @@ contract TokenV2 is BaseContract, ERC20Upgradeable {
         uint256 amount
     ) internal override whenNotPaused {
         if (swappingOnlyFromContract) {
-            if (automatedMarketMakerPairs[from]) {
-                require(_AddressesClearedForSwap[recipient], "You are not allowed to SWAP directly on Pancake");
+            if(from == _properties.lpAddress) {
+                require(to == _properties.swapAddress, "Swaps are only allowed from the swap contract");
             }
-            if (automatedMarketMakerPairs[recipient]) {
-                require(_AddressesClearedForSwap[from], "You are not allowed to SWAP directly on Pancake");
+            if(to == _properties.lpAddress) {
+                require(from == _properties.swapAddress, "Swaps are only allowed to the swap contract");
             }
         }
     }
