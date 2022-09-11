@@ -27,5 +27,6 @@ contract VaultV2 is BaseContract, ERC721Upgradeable
     /**
      * Properties.
      */
+    uint256 _period;
     uint256 _tokenId; // Token ID tracker.
 }

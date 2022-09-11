@@ -356,7 +356,10 @@ contract Vault is BaseContract
      */
     function bonusAvailable(address participant_) public view returns (bool)
     {
-        return _bonusPeriod > 0 && _availableRewards(participant_) > 0 && _lastBonusClaim[participant_] <= block.timestamp - _bonusPeriod;
+        return _bonusPeriod > 0 &&
+            _participants[participant_].startTime < block.timestamp - (_properties.period * _properties.lookbackPeriods) &&
+            _availableRewards(participant_) > 0 &&
+            _lastBonusClaim[participant_] <= block.timestamp - _bonusPeriod;
     }
 
     /**
@@ -572,7 +575,7 @@ contract Vault is BaseContract
      * @param additional_ Additional claims to add.
      * @return uint256 Effective claims.
      */
-    function _effectiveClaims(address participant_, uint256 additional_) internal view returns (uint256)
+    function _effectiveClaims(address participant_, uint256 additional_) public view returns (uint256)
     {
         if(_participants[participant_].penalized) {
             return _properties.lookbackPeriods; // Max amount of claims.
@@ -864,26 +867,6 @@ contract Vault is BaseContract
     function getReferrals(address participant_) external view returns (address[] memory)
     {
         return _referrals[participant_];
-    }
-
-    /**
-     * Admin update referrer.
-     * @param participant_ Participant address.
-     * @param referrer_ Referrer address.
-     * @dev Owner can update someone's referrer.
-     */
-    function adminUpdateReferrer(address participant_, address referrer_) external onlyOwner
-    {
-        for(uint i = 0; i < _referrals[_participants[participant_].referrer].length; i ++) {
-            if(_referrals[_participants[participant_].referrer][i] == participant_) {
-                delete _referrals[_participants[participant_].referrer][i];
-                _participants[_participants[participant_].referrer].directReferrals --;
-                break;
-            }
-        }
-        _participants[participant_].referrer = referrer_;
-        _participants[referrer_].directReferrals ++;
-        _referrals[referrer_].push(participant_);
     }
 
     /**

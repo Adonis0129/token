@@ -4,7 +4,7 @@ require("dotenv").config();
 const addressBook = process.env.ADDRESS_BOOK || '';
 
 async function main() {
-    const Swap = await ethers.getContractFactory("Swap");
+    const Swap = await ethers.getContractFactory("SwapV2");
     const swap = await upgrades.deployProxy(Swap);
     await swap.deployed();
     await swap.setAddressBook(addressBook);

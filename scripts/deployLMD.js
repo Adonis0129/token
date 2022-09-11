@@ -4,12 +4,14 @@ require("dotenv").config();
 const addressBook = process.env.ADDRESS_BOOK || '';
 
 async function main() {
+    const LMD = await ethers.getContractFactory("LMD");
+    const lmd = await upgrades.deployProxy(LMD);
+    await lmd.deployed();
     const AddressBook = await ethers.getContractFactory("AddressBook");
-    const addressbook = await AddressBook.attach(addressBook);
-    const autocompound = await addressbook.get("autocompound");
-    const AutoCompound = await ethers.getContractFactory("AutoCompoundV3");
-    await upgrades.upgradeProxy(autocompound, AutoCompound);
-    console.log("AutoCompound contract upgraded", autocompound);
+    const addressbook = AddressBook.attach(addressBook);
+    await addressbook.set('lms', lmd.address);
+    console.log("LMD proxy deployed to:", lmd.address);
+
 }
 
 main()

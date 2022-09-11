@@ -29,14 +29,8 @@ const main = async () => {
     // Deploy Pool
     const pool = await contract.deploy("Pool", "pool");
     console.log("POOL_ADDRESS=" + pool.address);
-    // Mint USDC to Pool
-    tx = await usdc.mintTo(pool.address, 1000000);
-    await tx.wait();
-    // Deploy Liquidity
-    tx = await pool.createLiquidity();
-    await tx.wait();
     // Deploy Swap
-    const swap = await contract.deploy("Swap", "swap");
+    const swap = await contract.deploy("SwapV2", "swap");
     console.log("SWAP_ADDRESS=" + swap.address);
     // Deploy Vault
     const vault = await contract.deploy("Vault", "vault");
@@ -62,6 +56,21 @@ const main = async () => {
     // Deploy LPStaking
     const lpstaking = await contract.deploy("LPStakingV1", "lpStaking");
     console.log("LPSTAKING_ADDRESS=" + lpstaking.address);
+    // Deploy TaxHandler
+    const taxhandler = await contract.deploy("TaxHandler", "taxHandler");
+    console.log("TAXHANDLER_ADDRESS=" + taxhandler.address);
+    // Update token addresses
+    console.log("Updating token addresses");
+    tx = await token.updateAddresses();
+    await tx.wait();
+    // Mint USDC to Pool
+    console.log("minting USDC to pool");
+    tx = await usdc.mintTo(pool.address, 1000000);
+    await tx.wait();
+    // Deploy Liquidity
+    console.log("creating liquidity");
+    tx = await pool.createLiquidity();
+    await tx.wait();
     // DONE!
 }
 

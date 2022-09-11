@@ -4,6 +4,7 @@ pragma solidity ^0.8.4;
 import "./abstracts/BaseContract.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 // INTERFACES
+import "./interfaces/IResolver.sol";
 import "./interfaces/IVault.sol";
 
 /**
@@ -13,7 +14,7 @@ import "./interfaces/IVault.sol";
  */
 
 /// @custom:security-contact security@furio.io
-contract AutoCompoundV2 is BaseContract
+contract AutoCompoundV3 is BaseContract, IResolver
 {
     /**
      * Contract initializer.
@@ -66,6 +67,29 @@ contract AutoCompoundV2 is BaseContract
     mapping(uint256 => address) private _addresses;
     mapping(address => uint256) private _ids;
     mapping(uint256 => bool) private _compounding;
+
+    uint256 private _checkers;
+
+    /**
+     * Checker.
+     * @param checker_ The checker number.
+     */
+    function checker(uint256 checker_) external view override returns (bool canExec, bytes memory execPayload)
+    {
+        require(checker_ < _checkers, "Invalid checker.");
+        uint256 _next_ = _next(checker_);
+        if (_next_ == 0) return (false, bytes("No participants are due for an auto compound"));
+        return(true, abi.encodeWithSelector(this.compound.selector, _next_));
+    }
+
+    /**
+     * Set checkers.
+     * @param checkers_ The number of checkers.
+     */
+    function setCheckers(uint256 checkers_) external onlyOwner
+    {
+        _checkers = checkers_;
+    }
 
     /**
      * Get properties.
@@ -152,19 +176,25 @@ contract AutoCompoundV2 is BaseContract
      */
     function next() public view returns (address)
     {
-        return _addresses[_next()];
+        for(uint256 i = 0; i < _checkers; i++) {
+            uint256 _next_ = _next(i);
+            if (_next_ != 0) return _addresses[_next_];
+        }
+        return address(0);
     }
 
     /**
      * Internal next.
+     * @param checker_ Chceker number.
      * @return uint256 Id of next participant.
      */
-    function _next() internal view returns (uint256)
+    function _next(uint256 checker_) internal view returns (uint256)
     {
         uint256 _dueDate_ = block.timestamp - _properties.period;
         for(uint256 i = 1; i <= _idTracker.current(); i ++) {
             if(!_compounding[i]) continue; // Skip if they're not compounding.
             if(_lastCompound[i] >= _dueDate_) continue; // Skip if their last compound was too soon.
+            if(i % _checkers != checker_) continue; // Skip if it's not their turn.
             return i; // Return first id that is ready to compound.
         }
         return 0;
@@ -187,13 +217,12 @@ contract AutoCompoundV2 is BaseContract
 
     /**
      * Compound next up.
+     * @param id_ Id of next participant.
      * @dev Auto compounds next participant.
      */
-    function compound() public whenNotPaused
+    function compound(uint256 id_) public whenNotPaused
     {
-        uint256 _id_ = _next();
-        require(_id_ > 0, "No participants to compound.");
-        _compound(_id_);
+        _compound(id_);
     }
 
     /**
