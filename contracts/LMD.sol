@@ -8,6 +8,7 @@ import "@uniswap/v2-core/contracts/interfaces/IUniswapV2Pair.sol";
 import "./interfaces/IToken.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "./interfaces/ILiquidityManager.sol";
+import "@uniswap/v2-core/contracts/interfaces/IUniswapV2Factory.sol";
 
 contract LMD is OwnableUpgradeable, ILiquidityManager {
     using SafeMath for uint256;
@@ -26,7 +27,7 @@ contract LMD is OwnableUpgradeable, ILiquidityManager {
     uint32 public pricePrecision;
     mapping(address => bool) private adminAddresses;
 
-    function init(address router, address usdcContract) external initializer {
+    function initialize(address router, address usdcContract) external initializer {
         __Ownable_init();
 
         usdcAddr = usdcContract;
@@ -78,6 +79,8 @@ contract LMD is OwnableUpgradeable, ILiquidityManager {
     {
         tokenAddr = tokenContractAddr;
         TOKEN = IToken(tokenContractAddr);
+        IUniswapV2Factory factory = IUniswapV2Factory(uniSwapRouter.factory());
+        swapPairAddr = factory.getPair(tokenAddr, usdcAddr);
     }
 
     function setSwapPair(address swapPair)
@@ -90,12 +93,12 @@ contract LMD is OwnableUpgradeable, ILiquidityManager {
 
     function enableLiquidityManager(bool value) external override adminsOnly {
         liquidityManagementEnabled = value;
-        if (value == true) {
-            require(
-                _msgSender() == tokenAddr,
-                "LM can only be reactivated from token contract"
-            );
-        }
+        //if (value == true) {
+            //require(
+                //_msgSender() == tokenAddr,
+                //"LM can only be reactivated from token contract"
+            //);
+        //}
     }
 
     // calculate price based on pair reserves
@@ -206,4 +209,13 @@ contract LMD is OwnableUpgradeable, ILiquidityManager {
 
     function rebalance(uint256 amount, bool buyback) external override
     {}
+
+    /**
+     * Set address book.
+     * @param address_ Address book address.
+     * @dev Sets the address book address.
+     */
+    function setAddressBook(address address_) public onlyOwner
+    {
+    }
 }

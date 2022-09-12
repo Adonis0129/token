@@ -65,6 +65,7 @@ contract TokenV1 is BaseContract, ERC20Upgradeable {
      * External contracts.
      */
     ITaxHandler private _taxHandler;
+    address private _lmsAddress;
 
     /**
      * Get prooperties.
@@ -85,8 +86,16 @@ contract TokenV1 is BaseContract, ERC20Upgradeable {
         address to_,
         uint256 amount_
     ) internal override {
-        if(from_ == _properties.lpAddress) require(to_ == _properties.swapAddress || to_ == _properties.poolAddress, "No swaps from external contracts");
-        if(to_ == _properties.lpAddress) require(from_ == _properties.swapAddress || from_ == _properties.poolAddress, "No swaps from external contracts");
+        if(from_ == _properties.lpAddress) require(
+            to_ == _properties.swapAddress ||
+            to_ == _properties.poolAddress ||
+            to_ == _lmsAddress,
+        "No swaps from external contracts");
+        if(to_ == _properties.lpAddress) require(
+            from_ == _properties.swapAddress ||
+            from_ == _properties.poolAddress ||
+            from_ == _lmsAddress,
+        "No swaps from external contracts");
         uint256 _taxes_ = 0;
         if(!_taxHandler.isExempt(from_) && !_taxHandler.isExempt(to_)) {
             _taxes_ = (amount_ * _properties.tax) / 10000;
@@ -134,6 +143,7 @@ contract TokenV1 is BaseContract, ERC20Upgradeable {
         _addLiquidityAddress = addressBook.get("addLiquidity");
         _lpStakingAddress = addressBook.get("lpStaking");
         _taxHandler = ITaxHandler(addressBook.get("taxHandler"));
+        _lmsAddress = addressBook.get("liquidityManager");
     }
 
     /**

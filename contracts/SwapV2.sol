@@ -76,7 +76,7 @@ contract SwapV2 is BaseContract
         liquidityManager = ILiquidityManager(addressBook.get("liquidityManager"));
         router = IUniswapV2Router02(addressBook.get("router"));
         taxHandler = ITaxHandler(addressBook.get("taxHandler"));
-        usdc = IERC20(addressBook.get("usdc"));
+        usdc = IERC20(addressBook.get("payment"));
         vault = IVault(addressBook.get("vault"));
         pair = IUniswapV2Pair(factory.getPair(address(fur), address(usdc)));
         _isExemptFromCooldown[address(this)] = true;
@@ -235,11 +235,11 @@ contract SwapV2 is BaseContract
         uint256 _output_;
         if(in_ == address(fur)) {
             _output_ = sellOutput(amount_);
-            liquidityManager.swapTokenForUsdc(address(this), amount_, 0);
+            liquidityManager.swapTokenForUsdc(address(this), amount_, _output_);
         }
         else {
             _output_ = buyOutput(address(usdc), amount_);
-            liquidityManager.swapUsdcForToken(address(this), amount_, 0);
+            liquidityManager.swapUsdcForToken(address(this), amount_, _output_);
         }
     }
 

@@ -59,9 +59,16 @@ const main = async () => {
     // Deploy TaxHandler
     const taxhandler = await contract.deploy("TaxHandler", "taxHandler");
     console.log("TAXHANDLER_ADDRESS=" + taxhandler.address);
+    // Deploy LMD
+    const lmd = await contract.deploy("LMD", "liquidityManager", [router, usdc.address]);
+    console.log("LMD_ADDRESS=" + lmd.address);
     // Update token addresses
     console.log("Updating token addresses");
     tx = await token.updateAddresses();
+    await tx.wait();
+    // Update swap addresses
+    console.log("Updating swap addresses");
+    tx = await swap.setup();
     await tx.wait();
     // Mint USDC to Pool
     console.log("minting USDC to pool");
@@ -70,6 +77,28 @@ const main = async () => {
     // Deploy Liquidity
     console.log("creating liquidity");
     tx = await pool.createLiquidity();
+    await tx.wait();
+    // Set token contract address in LMS
+    console.log("setting token contract address in LMS");
+    tx = await lmd.setTokenContractAddr(token.address);
+    await tx.wait();
+    // Setting swap as admin in LMS
+    console.log("setting swap as admin in LMS");
+    tx = await lmd.setAdmins(swap.address, true);
+    await tx.wait();
+    // Get some USDC and try to swap
+    console.log("minting usdc");
+    tx = await usdc.mint("1000");
+    await tx.wait();
+    // Enable LMS
+    console.log("enabling LMS");
+    tx = await swap.enableLiquidityManager();
+    await tx.wait();
+    // Try to swap
+    console.log("trying to swap");
+    tx = await usdc.approve(swap.address, "1000000000000000000000");
+    await tx.wait();
+    tx = await swap.buy(usdc.address, "1000000000000000000000");
     await tx.wait();
     // DONE!
 }

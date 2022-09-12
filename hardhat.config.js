@@ -51,7 +51,7 @@ module.exports = {
             },
         ],
     },
-    defaultNetwork: "testnet",
+    defaultNetwork: "hardhat",
     networks: {
         testnet: {
             url: process.env.TESTNET_RPC_URL || '',
@@ -64,6 +64,12 @@ module.exports = {
             accounts: accounts,
             gasMultiplier: 3,
             timeout: 60000,
+        },
+        hardhat: {
+            forking: {
+                url: "https://eth-mainnet.g.alchemy.com/v2/at6o68t3K8QNwnEwx_yb8wNrUoUVqcCi",
+                blockNumber: 15522740,
+            },
         },
     },
     etherscan: {
