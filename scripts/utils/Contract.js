@@ -35,7 +35,8 @@ class Contract {
         const addressbook = AddressBook.attach(this.addressbookAddress);
         const address = await addressbook.get(addressBookName);
         const ContractFactory = await hre.ethers.getContractFactory(name);
-        await hre.upgrades.upgradeProxy(address, ContractFactory);
+        const contract = await hre.upgrades.upgradeProxy(address, ContractFactory);
+        return contract;
     }
 }
 

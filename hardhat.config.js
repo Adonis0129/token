@@ -51,7 +51,7 @@ module.exports = {
             },
         ],
     },
-    defaultNetwork: "hardhat",
+    defaultNetwork: "testnet",
     networks: {
         testnet: {
             url: process.env.TESTNET_RPC_URL || '',

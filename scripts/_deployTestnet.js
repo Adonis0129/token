@@ -1,8 +1,8 @@
 const hre = require("hardhat");
 const Contract = require("./utils/Contract");
 require("dotenv").config();
-const factory = process.env.FACTORY || '';
 const router = process.env.ROUTER || '';
+const factory = process.env.FACTORY || '';
 const safe = process.env.SAFE || '';
 
 const main = async () => {
@@ -10,7 +10,10 @@ const main = async () => {
     // Deploy AddressBook
     const addressbook = await contract.deploy("AddressBook");
     console.log("ADDRESSBOOK_ADDRESS=" + addressbook.address);
-    let tx = await addressbook.set("factory", factory);
+    // Set addresses
+    let tx = await addressbook.set("router", router);
+    await tx.wait();
+    tx = await addressbook.set("factory", factory);
     await tx.wait();
     tx = await addressbook.set("router", router);
     await tx.wait();
@@ -21,7 +24,8 @@ const main = async () => {
     // Re instantiate contract with new addressbook
     contract = new Contract(addressbook.address);
     // Deploy Token
-    const token = await contract.deploy("TokenV1", "token");
+    await contract.deploy("Token", "token");
+    const token = await contract.upgrade("TokenV1", "token");
     console.log("TOKEN_ADDRESS=" + token.address);
     // Deploy USDC
     const usdc = await contract.deploy("FakeToken", "payment", ["USD Coin", "USDC"]);
@@ -60,15 +64,19 @@ const main = async () => {
     const taxhandler = await contract.deploy("TaxHandler", "taxHandler");
     console.log("TAXHANDLER_ADDRESS=" + taxhandler.address);
     // Deploy LMD
-    const lmd = await contract.deploy("LMD", "liquidityManager", [router, usdc.address]);
-    console.log("LMD_ADDRESS=" + lmd.address);
+    //const lmd = await contract.deploy("LMD", "liquidityManager", [router, usdc.address]);
+    //console.log("LMD_ADDRESS=" + lmd.address);
     // Update token addresses
-    console.log("Updating token addresses");
-    tx = await token.updateAddresses();
+    console.log("Setting up token");
+    tx = await token.setup();
     await tx.wait();
     // Update swap addresses
-    console.log("Updating swap addresses");
+    console.log("Setting up swap");
     tx = await swap.setup();
+    await tx.wait();
+    // Setup tax handler
+    console.log("Setting up tax handler");
+    tx = await taxhandler.setup();
     await tx.wait();
     // Mint USDC to Pool
     console.log("minting USDC to pool");
@@ -79,27 +87,27 @@ const main = async () => {
     tx = await pool.createLiquidity();
     await tx.wait();
     // Set token contract address in LMS
-    console.log("setting token contract address in LMS");
-    tx = await lmd.setTokenContractAddr(token.address);
-    await tx.wait();
+    //console.log("setting token contract address in LMS");
+    //tx = await lmd.setTokenContractAddr(token.address);
+    //await tx.wait();
     // Setting swap as admin in LMS
-    console.log("setting swap as admin in LMS");
-    tx = await lmd.setAdmins(swap.address, true);
-    await tx.wait();
+    //console.log("setting swap as admin in LMS");
+    //tx = await lmd.setAdmins(swap.address, true);
+    //await tx.wait();
     // Get some USDC and try to swap
-    console.log("minting usdc");
-    tx = await usdc.mint("1000");
-    await tx.wait();
+    //console.log("minting usdc");
+    //tx = await usdc.mint("1000");
+    //await tx.wait();
     // Enable LMS
-    console.log("enabling LMS");
-    tx = await swap.enableLiquidityManager();
-    await tx.wait();
+    //console.log("enabling LMS");
+    //tx = await swap.enableLiquidityManager();
+    //await tx.wait();
     // Try to swap
-    console.log("trying to swap");
-    tx = await usdc.approve(swap.address, "1000000000000000000000");
-    await tx.wait();
-    tx = await swap.buy(usdc.address, "1000000000000000000000");
-    await tx.wait();
+    //console.log("trying to swap");
+    //tx = await usdc.approve(swap.address, "1000000000000000000000");
+    //await tx.wait();
+    //tx = await swap.buy(usdc.address, "1000000000000000000000");
+    //await tx.wait();
     // DONE!
 }
 

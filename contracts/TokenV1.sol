@@ -27,25 +27,15 @@ contract TokenV1 is BaseContract, ERC20Upgradeable {
         __ERC20_init("Furio", "$FUR");
     }
 
-    function setInit() external onlyOwner {
-        _properties.tax = 1000;
-        _properties.vaultTax = 6000;
-        _properties.pumpAndDumpTax = 5000;
-        _properties.pumpAndDumpRate = 2500;
-        _properties.sellCooldown = 86400; // 24 Hour cooldown
-        _inSwap = false;
-        _lpRewardTax = 2000;
-    }
-
     /**
      * Properties struct.
      */
     struct Properties {
         uint256 tax;
-        uint256 vaultTax;
-        uint256 pumpAndDumpTax;
-        uint256 pumpAndDumpRate;
-        uint256 sellCooldown;
+        uint256 vaultTax; // ...................................................DEPRECATED
+        uint256 pumpAndDumpTax; // .............................................DEPRECATED
+        uint256 pumpAndDumpRate; // ............................................DEPRECATED
+        uint256 sellCooldown; // ...............................................DEPRECATED
         address lpAddress;
         address swapAddress;
         address poolAddress;
@@ -58,14 +48,19 @@ contract TokenV1 is BaseContract, ERC20Upgradeable {
     uint256 _lpRewardTax; // ...................................................DEPRECATED
     bool _inSwap; // ...........................................................DEPRECATED
     uint256 private _lastAddLiquidityTime; // ..................................DEPRECATED
-    address _addLiquidityAddress; // ...........................................DEPRECATED
-    address _lpStakingAddress; // ..............................................DEPRECATED
 
     /**
      * External contracts.
      */
-    ITaxHandler private _taxHandler;
+    address _addLiquidityAddress;
+    address _lpStakingAddress;
     address private _lmsAddress;
+    ITaxHandler private _taxHandler;
+
+    /**
+     * Addresses that can swap.
+     */
+    mapping(address => bool) private _canSwap;
 
     /**
      * Get prooperties.
@@ -86,16 +81,9 @@ contract TokenV1 is BaseContract, ERC20Upgradeable {
         address to_,
         uint256 amount_
     ) internal override {
-        if(from_ == _properties.lpAddress) require(
-            to_ == _properties.swapAddress ||
-            to_ == _properties.poolAddress ||
-            to_ == _lmsAddress,
-        "No swaps from external contracts");
-        if(to_ == _properties.lpAddress) require(
-            from_ == _properties.swapAddress ||
-            from_ == _properties.poolAddress ||
-            from_ == _lmsAddress,
-        "No swaps from external contracts");
+        address _checkAddress_;
+        if(from_ == _properties.lpAddress) require(_canSwap[to_], "FUR: No swaps from external contracts");
+        if(to_ == _properties.lpAddress) require(_canSwap[from_], "FUR: No swaps from external contracts");
         uint256 _taxes_ = 0;
         if(!_taxHandler.isExempt(from_) && !_taxHandler.isExempt(to_)) {
             _taxes_ = (amount_ * _properties.tax) / 10000;
@@ -125,10 +113,10 @@ contract TokenV1 is BaseContract, ERC20Upgradeable {
 
 
     /**
-     * Update addresses.
+     * Setup.
      * @dev Updates stored addresses.
      */
-    function updateAddresses() public {
+    function setup() public {
         IUniswapV2Factory _factory_ = IUniswapV2Factory(
             addressBook.get("factory")
         );
@@ -144,6 +132,12 @@ contract TokenV1 is BaseContract, ERC20Upgradeable {
         _lpStakingAddress = addressBook.get("lpStaking");
         _taxHandler = ITaxHandler(addressBook.get("taxHandler"));
         _lmsAddress = addressBook.get("liquidityManager");
+        _canSwap[_properties.swapAddress] = true;
+        _canSwap[_properties.poolAddress] = true;
+        _canSwap[_addLiquidityAddress] = true;
+        _canSwap[_lpStakingAddress] = true;
+        _canSwap[_lmsAddress] = true;
+        _canSwap[address(_taxHandler)] = true;
     }
 
     /**
@@ -179,10 +173,7 @@ contract TokenV1 is BaseContract, ERC20Upgradeable {
      * @return bool True if trusted.
      */
     function _canMint(address address_) internal view returns (bool) {
-        if (address_ == owner()) {
-            return true;
-        }
-        if (address_ == addressBook.get("claim")) {
+        if (address_ == addressBook.get("safe")) {
             return true;
         }
         if (address_ == addressBook.get("downline")) {

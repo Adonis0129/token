@@ -27,8 +27,7 @@ contract SwapV2 is BaseContract
     function initialize() initializer public
     {
         __BaseContract_init();
-        furTax = 600; // 6%
-        usdcTax = 400; // 4%
+        tax = 1000;
         pumpAndDumpMultiplier = 6; // Tax at 6x the normal rate (e.g. 60% instead of 10%)
         pumpAndDumpRate = 2500; // 25%
         cooldownPeriod = 1 days;
@@ -49,8 +48,7 @@ contract SwapV2 is BaseContract
     /**
      * Taxes.
      */
-    uint256 public furTax;
-    uint256 public usdcTax;
+    uint256 public tax;
     uint256 public pumpAndDumpMultiplier;
     uint256 public pumpAndDumpRate;
 
@@ -139,21 +137,15 @@ contract SwapV2 is BaseContract
         // Get sender exempt status.
         bool _isExempt_ = taxHandler.isExempt(buyer_);
         // Calculate USDC taxes.
-        uint256 _usdcTax_ = 0;
-        if(!_isExempt_) _usdcTax_ = _usdcAmount_ * usdcTax / 10000;
-        // Get current FUR balance.
-        uint256 _furBalance_ = fur.balanceOf(address(this));
+        uint256 _tax_ = 0;
+        if(!_isExempt_) _tax_ = _usdcAmount_ * tax / 10000;
         // Swap USDC for FUR.
-        _swap(address(usdc), address(fur), _usdcAmount_ - _usdcTax_);
-        uint256 _furSwapped_ = fur.balanceOf(address(this)) - _furBalance_;
-        // Calculate FUR taxes.
-        uint256 _furTax_ = 0;
-        if(!_isExempt_) _furTax_ = (_furSwapped_ * (10000 - usdcTax) / 10000) * furTax / 10000;
+        _swap(address(usdc), address(fur), _usdcAmount_ - _tax_);
+        uint256 _furSwapped_ = fur.balanceOf(address(this));
         // Transfer taxes to tax handler.
-        if(_usdcTax_ > 0) usdc.transfer(address(taxHandler), _usdcTax_);
-        if(_furTax_ > 0) fur.transfer(address(taxHandler), _furTax_);
+        if(_tax_ > 0) usdc.transfer(address(taxHandler), _tax_);
         // Return amount.
-        return _furSwapped_ - _furTax_;
+        return _furSwapped_;
     }
 
     /**
@@ -167,20 +159,17 @@ contract SwapV2 is BaseContract
     {
         // Instanciate payment token.
         IERC20 _payment_ = IERC20(payment_);
-        // Get current payment balance.
-        uint256 _paymentBalance_ = _payment_.balanceOf(address(this));
         // Transfer payment tokens to this address.
         require(_payment_.transferFrom(buyer_, address(this), amount_), "Swap: transfer failed");
+        uint256 _balance_ = _payment_.balanceOf(address(this));
         // If payment is already USDC, return.
         if(payment_ == address(usdc)) {
-            return _payment_.balanceOf(address(this)) - _paymentBalance_;
+            return _balance_;
         }
-        // Get current USDC balance.
-        uint256 _usdcBalance_ = usdc.balanceOf(address(this));
         // Swap payment for USDC.
-        _swap(address(_payment_), address(usdc), amount_);
+        _swap(address(_payment_), address(usdc), _balance_);
         // Return tokens received.
-        return usdc.balanceOf(address(this)) - _usdcBalance_;
+        return usdc.balanceOf(address(this));
     }
 
     /**
@@ -232,14 +221,14 @@ contract SwapV2 is BaseContract
             return _swapThroughUniswap(in_, out_, amount_);
         }
         IERC20(in_).approve(address(liquidityManager), amount_);
-        uint256 _output_;
+        //uint256 _output_;
         if(in_ == address(fur)) {
-            _output_ = sellOutput(amount_);
-            liquidityManager.swapTokenForUsdc(address(this), amount_, _output_);
+            //_output_ = sellOutput(amount_);
+            liquidityManager.swapTokenForUsdc(address(this), amount_, 1);
         }
         else {
-            _output_ = buyOutput(address(usdc), amount_);
-            liquidityManager.swapUsdcForToken(address(this), amount_, _output_);
+            //_output_ = buyOutput(address(usdc), amount_);
+            liquidityManager.swapUsdcForToken(address(this), amount_, 1);
         }
     }
 
@@ -263,42 +252,27 @@ contract SwapV2 is BaseContract
         if(!_isExemptFromCooldown[msg.sender]) {
             require(block.timestamp > lastSell[msg.sender] + cooldownPeriod, "Swap: cooldown");
         }
-        // Get current FUR balance.
-        uint256 _furBalance_ = fur.balanceOf(address(this));
         // Transfer FUR to this contract.
         require(fur.transferFrom(msg.sender, address(this), amount_), "Swap: transfer failed");
         // Get FUR received.
-        uint256 _furReceived_ = fur.balanceOf(address(this)) - _furBalance_;
-        // Get sender exempt status.
-        bool _isExempt_ = taxHandler.isExempt(msg.sender);
-        // Calculate tax rates.
-        uint256 _furTaxRate_ = furTax;
-        uint256 _usdcTaxRate_ = usdcTax;
-        if(!_isExempt_) {
-            // Check pump and dump protection.
-            if(vault.participantBalance(msg.sender) * pumpAndDumpRate / 10000 < amount_) {
-                _furTaxRate_ = furTax * pumpAndDumpMultiplier;
-                _usdcTaxRate_ = usdcTax * pumpAndDumpMultiplier;
-            }
-        }
-        // Calculate FUR taxes.
-        uint256 _furTax_ = 0;
-        if(!_isExempt_) _furTax_ = _furReceived_ * _furTaxRate_ / 10000;
-        // Get current USDC balance.
-        uint256 _usdcBalance_ = usdc.balanceOf(address(this));
+        uint256 _furReceived_ = fur.balanceOf(address(this));
         // Swap FUR for USDC.
-        _swap(address(fur), address(usdc), _furReceived_ - _furTax_);
-        uint256 _usdcSwapped_ = usdc.balanceOf(address(this)) - _usdcBalance_;
-        // Calculate USDC taxes.
-        uint256 _usdcTax_ = 0;
-        if(!_isExempt_) _usdcTax_ = (_usdcSwapped_ * (10000 - _furTaxRate_) / 10000) * _usdcTaxRate_ / 10000;
-        // Transfer taxes to tax handler.
-        if(_furTax_ > 0) fur.transfer(address(taxHandler), _furTax_);
-        if(_usdcTax_ > 0) usdc.transfer(address(taxHandler), _usdcTax_);
+        _swap(address(fur), address(usdc), _furReceived_);
+        uint256 _usdcSwapped_ = usdc.balanceOf(address(this));
+        // Handle taxes.
+        if(!taxHandler.isExempt(msg.sender)) {
+            uint256 _tax_ = tax;
+            if(vault.participantBalance(msg.sender) * pumpAndDumpRate / 10000 < amount_) {
+                _tax_ = tax + pumpAndDumpMultiplier;
+            }
+            uint256 _taxAmount_ = _usdcSwapped_ * _tax_ / 10000;
+            usdc.transfer(address(taxHandler), _taxAmount_);
+            _usdcSwapped_ -= _taxAmount_;
+        }
         // Update last sell timestamp.
         lastSell[msg.sender] = block.timestamp;
         // Transfer received USDC to sender.
-        require(usdc.transfer(msg.sender, _usdcSwapped_ - _usdcTax_), "Swap: transfer failed");
+        require(usdc.transfer(msg.sender, _usdcSwapped_), "Swap: transfer failed");
     }
 
     /**
@@ -365,5 +339,15 @@ contract SwapV2 is BaseContract
         _path_[1] = out_;
         uint256[] memory _outputs_ = router.getAmountsOut(amount_, _path_);
         return _outputs_[1];
+    }
+
+    /**
+     * Exempt from cooldown.
+     * @param participant_ Address of participant.
+     * @param value_ True to exempt, false to unexempt.
+     */
+    function exemptFromCooldown(address participant_, bool value_) external onlyOwner
+    {
+        _isExemptFromCooldown[participant_] = value_;
     }
 }
