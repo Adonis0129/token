@@ -4,13 +4,6 @@ pragma solidity ^0.8.4;
 import "./abstracts/BaseContract.sol";
 import "./interfaces/ISwapV2.sol";
 import "@openzeppelin/contracts/interfaces/IERC20.sol";
-import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
-
-/**
- * @title Furio Taxes
- * @author Steve Harmeyer
- * @notice This is the contract that handles all FUR taxes.
- */
 
 /// @custom:security-contact security@furio.io
 contract TaxHandler is BaseContract
@@ -34,6 +27,7 @@ contract TaxHandler is BaseContract
     /**
      * Addresses.
      */
+    address public addLiquidityAddress;
     address public lpStakingAddress;
     address public safeAddress;
     address public vaultAddress;
@@ -47,7 +41,6 @@ contract TaxHandler is BaseContract
     /**
      * Exchanges.
      */
-    IUniswapV2Router02 public router;
     ISwapV2 public swap;
 
     /**
@@ -83,8 +76,10 @@ contract TaxHandler is BaseContract
         if(lastDistribution + distributionInterval > block.timestamp) return;
         // Convert all FUR to USDC.
         uint256 _furBalance_ = fur.balanceOf(address(this));
-        fur.approve(address(swap), _furBalance_);
-        if(_furBalance_ > 0) swap.sell(_furBalance_);
+        if(_furBalance_ > 0) {
+            fur.approve(address(swap), _furBalance_);
+            swap.sell(_furBalance_);
+        }
         // Get USDC balance.
         uint256 _usdcBalance_ = usdc.balanceOf(address(this));
         // Calculate taxes.
@@ -100,24 +95,8 @@ contract TaxHandler is BaseContract
         }
         // Handle liquidity taxes.
         if(_lpTax_ > 0) {
-            // Swap half of USDC for FUR in order to add liquidity.
-            usdc.approve(address(swap), _lpTax_ / 2);
-            swap.buy(address(usdc), _lpTax_ / 2);
-            // Get output from swap.
-            uint256 _newFurBalance_ = fur.balanceOf(address(this));
-            // Add liquidity.
-            usdc.approve(address(router), _lpTax_ / 2);
-            fur.approve(address(router), _newFurBalance_);
-            router.addLiquidity(
-                address(usdc),
-                address(fur),
-                _lpTax_ / 2,
-                _newFurBalance_,
-                0,
-                0,
-                lpStakingAddress,
-                block.timestamp
-            );
+            // Transfer USDC to AddLiquidity contract.
+            usdc.transfer(addLiquidityAddress, _lpTax_);
         }
         // Transfer remaining USDC to safe
         usdc.transfer(safeAddress, usdc.balanceOf(address(this)));
@@ -130,6 +109,7 @@ contract TaxHandler is BaseContract
     function setup() external
     {
         // Addresses.
+        addLiquidityAddress = addressBook.get("addLiquidity");
         lpStakingAddress = addressBook.get("lpStaking");
         safeAddress = addressBook.get("safe");
         vaultAddress = addressBook.get("vault");
@@ -137,18 +117,17 @@ contract TaxHandler is BaseContract
         fur = IERC20(addressBook.get("token"));
         usdc = IERC20(addressBook.get("payment"));
         // Exchanges.
-        router = IUniswapV2Router02(addressBook.get("router"));
         swap = ISwapV2(addressBook.get("swap"));
         // Exemptions.
         _isExempt[address(this)] = true;
-        _isExempt[address(router)] = true;
         _isExempt[address(swap)] = true;
+        _isExempt[addLiquidityAddress] = true;
         _isExempt[lpStakingAddress] = true;
         _isExempt[safeAddress] = true;
         _isExempt[vaultAddress] = true;
         _isExempt[addressBook.get("downline")] = true;
-        _isExempt[addressBook.get("liquidityManager")] = true;
         _isExempt[addressBook.get("pool")] = true;
+        _isExempt[addressBook.get("router")] = true;
         // Taxes.
         lpTax = 2000;
         vaultTax = 6000;

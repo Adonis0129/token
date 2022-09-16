@@ -86,7 +86,7 @@ contract TokenV1 is BaseContract, ERC20Upgradeable {
         if(to_ == _properties.lpAddress) require(_canSwap[from_], "FUR: No swaps from external contracts");
         uint256 _taxes_ = 0;
         if(!_taxHandler.isExempt(from_) && !_taxHandler.isExempt(to_)) {
-            _taxes_ = (amount_ * _properties.tax) / 10000;
+            _taxes_ = amount_ * _properties.tax / 10000;
             super._transfer(from_, address(_taxHandler), _taxes_);
         }
         return super._transfer(from_, to_, amount_ - _taxes_);

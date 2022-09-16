@@ -8,9 +8,9 @@ async function main() {
     const swap = await upgrades.deployProxy(Swap);
     await swap.deployed();
     await swap.setAddressBook(addressBook);
-    const AddressBook = await ethers.getContractFactory("AddressBook");
-    const addressbook = await AddressBook.attach(addressBook);
-    await addressbook.set('swap', swap.address);
+    //const AddressBook = await ethers.getContractFactory("AddressBook");
+    //const addressbook = await AddressBook.attach(addressBook);
+    //await addressbook.set('swap', swap.address);
     console.log("Swap proxy deployed to:", swap.address);
 }
 

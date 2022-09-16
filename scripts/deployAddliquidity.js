@@ -4,7 +4,7 @@ require("dotenv").config();
 const addressBook = process.env.ADDRESS_BOOK || '';
 
 async function main() {
-    const Addliquidity = await ethers.getContractFactory("AddLiquidity");
+    const Addliquidity = await ethers.getContractFactory("AddLiquidityV2");
     const addLiquidity = await upgrades.deployProxy(Addliquidity);
     await addLiquidity.deployed();
     let tx = await addLiquidity.setAddressBook(addressBook);
