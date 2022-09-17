@@ -6,9 +6,7 @@ import "./interfaces/IVault.sol";
 import "./interfaces/IAddLiquidity.sol";
 import "./interfaces/ITaxHandler.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
-import "@openzeppelin/contracts/interfaces/IERC20.sol";
 import "@uniswap/v2-core/contracts/interfaces/IUniswapV2Factory.sol";
-import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
 
 /**
  * @title Furio Token
@@ -81,7 +79,6 @@ contract TokenV1 is BaseContract, ERC20Upgradeable {
         address to_,
         uint256 amount_
     ) internal override {
-        address _checkAddress_;
         if(from_ == _properties.lpAddress) require(_canSwap[to_], "FUR: No swaps from external contracts");
         if(to_ == _properties.lpAddress) require(_canSwap[from_], "FUR: No swaps from external contracts");
         uint256 _taxes_ = 0;

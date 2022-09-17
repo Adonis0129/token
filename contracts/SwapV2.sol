@@ -80,6 +80,7 @@ contract SwapV2 is BaseContract
         _isExemptFromCooldown[address(this)] = true;
         _isExemptFromCooldown[address(liquidityManager)] = true;
         _isExemptFromCooldown[address(taxHandler)] = true;
+        _isExemptFromCooldown[addressBook.get("addLiquidity")] = true;
         _isExemptFromCooldown[owner()] = true;
     }
 
@@ -139,9 +140,11 @@ contract SwapV2 is BaseContract
         // Calculate USDC taxes.
         uint256 _tax_ = 0;
         if(!_isExempt_) _tax_ = _usdcAmount_ * tax / 10000;
+        // Get FUR balance.
+        uint256 _startingFurBalance_ = fur.balanceOf(address(this));
         // Swap USDC for FUR.
         _swap(address(usdc), address(fur), _usdcAmount_ - _tax_);
-        uint256 _furSwapped_ = fur.balanceOf(address(this));
+        uint256 _furSwapped_ = fur.balanceOf(address(this)) - _startingFurBalance_;
         // Transfer taxes to tax handler.
         if(_tax_ > 0) usdc.transfer(address(taxHandler), _tax_);
         // Return amount.
@@ -159,17 +162,21 @@ contract SwapV2 is BaseContract
     {
         // Instanciate payment token.
         IERC20 _payment_ = IERC20(payment_);
+        // Get payment balance.
+        uint256 _startingPaymentBalance_ = _payment_.balanceOf(address(this));
         // Transfer payment tokens to this address.
         require(_payment_.transferFrom(buyer_, address(this), amount_), "Swap: transfer failed");
-        uint256 _balance_ = _payment_.balanceOf(address(this));
+        uint256 _balance_ = _payment_.balanceOf(address(this)) - _startingPaymentBalance_;
         // If payment is already USDC, return.
         if(payment_ == address(usdc)) {
             return _balance_;
         }
         // Swap payment for USDC.
+        uint256 _startingUsdcBalance_ = usdc.balanceOf(address(this));
         _swap(address(_payment_), address(usdc), _balance_);
+        uint256 _usdcSwapped_ = usdc.balanceOf(address(this)) - _startingUsdcBalance_;
         // Return tokens received.
-        return usdc.balanceOf(address(this));
+        return _usdcSwapped_;
     }
 
     /**
@@ -252,13 +259,17 @@ contract SwapV2 is BaseContract
         if(!_isExemptFromCooldown[msg.sender]) {
             require(block.timestamp > lastSell[msg.sender] + cooldownPeriod, "Swap: cooldown");
         }
+        // Get starting FUR balance.
+        uint256 _startingFurBalance_ = fur.balanceOf(address(this));
         // Transfer FUR to this contract.
         require(fur.transferFrom(msg.sender, address(this), amount_), "Swap: transfer failed");
         // Get FUR received.
-        uint256 _furReceived_ = fur.balanceOf(address(this));
+        uint256 _furReceived_ = fur.balanceOf(address(this)) - _startingFurBalance_;
+        // Get starting USDC balance.
+        uint256 _startingUsdcBalance_ = usdc.balanceOf(address(this));
         // Swap FUR for USDC.
         _swap(address(fur), address(usdc), _furReceived_);
-        uint256 _usdcSwapped_ = usdc.balanceOf(address(this));
+        uint256 _usdcSwapped_ = usdc.balanceOf(address(this)) - _startingUsdcBalance_;
         // Handle taxes.
         if(!taxHandler.isExempt(msg.sender)) {
             uint256 _tax_ = tax;
@@ -349,5 +360,20 @@ contract SwapV2 is BaseContract
     function exemptFromCooldown(address participant_, bool value_) external onlyOwner
     {
         _isExemptFromCooldown[participant_] = value_;
+    }
+
+    /**
+     * Sweep dust.
+     */
+    function sweepDust() external onlyOwner
+    {
+        uint256 _furBalance_ = fur.balanceOf(address(this));
+        if(_furBalance_ > 0) {
+            fur.transfer(address(taxHandler), _furBalance_);
+        }
+        uint256 _usdcBalance_ = usdc.balanceOf(address(this));
+        if(_usdcBalance_ > 0) {
+            usdc.transfer(address(taxHandler), _usdcBalance_);
+        }
     }
 }
