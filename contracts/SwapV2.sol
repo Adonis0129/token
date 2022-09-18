@@ -369,7 +369,7 @@ contract SwapV2 is BaseContract
     {
         uint256 _furBalance_ = fur.balanceOf(address(this));
         if(_furBalance_ > 0) {
-            fur.transfer(address(taxHandler), _furBalance_);
+            fur.transfer(address(vault), _furBalance_);
         }
         uint256 _usdcBalance_ = usdc.balanceOf(address(this));
         if(_usdcBalance_ > 0) {
