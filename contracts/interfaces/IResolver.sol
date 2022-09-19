@@ -6,4 +6,8 @@ interface IResolver {
         external
         view
         returns (bool canExec, bytes memory execPayload);
+    function checker()
+        external
+        view
+        returns (bool canExec, bytes memory execPayload);
 }

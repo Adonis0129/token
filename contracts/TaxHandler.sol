@@ -1,12 +1,16 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.4;
 
+interface IResolver {
+    function checker() external view returns (bool canExec, bytes memory execPayload);
+}
+
 import "./abstracts/BaseContract.sol";
 import "./interfaces/ISwapV2.sol";
 import "@openzeppelin/contracts/interfaces/IERC20.sol";
 
 /// @custom:security-contact security@furio.io
-contract TaxHandler is BaseContract
+contract TaxHandler is BaseContract, IResolver
 {
     /**
      * Contract initializer.
@@ -50,6 +54,15 @@ contract TaxHandler is BaseContract
     uint256 public lastDistribution;
 
     /**
+     * Checker.
+     */
+    function checker() external view override returns (bool canExec, bytes memory execPayload)
+    {
+        if(lastDistribution + distributionInterval <= block.timestamp) return (false, bytes("Distribution is not due"));
+        return(true, abi.encodeWithSelector(this.distribute.selector));
+    }
+
+    /**
      * Check if address is exempt.
      * @param address_ Address to check.
      * @return bool True if address is exempt.
@@ -73,7 +86,6 @@ contract TaxHandler is BaseContract
      */
     function distribute() external
     {
-        if(lastDistribution + distributionInterval > block.timestamp) return;
         // Convert all FUR to USDC.
         uint256 _furBalance_ = fur.balanceOf(address(this));
         if(_furBalance_ > 0) {

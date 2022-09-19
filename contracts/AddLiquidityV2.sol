@@ -1,13 +1,17 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.4;
 
+interface IResolver {
+    function checker() external view returns (bool canExec, bytes memory execPayload);
+}
+
 import "./abstracts/BaseContract.sol";
 import "./interfaces/ISwapV2.sol";
 import "@openzeppelin/contracts/interfaces/IERC20.sol";
 import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
 
 /// @custom:security-contact security@furio.io
-contract AddLiquidityV2 is BaseContract
+contract AddLiquidityV2 is BaseContract, IResolver
 {
     /**
      * Contract initializer.
@@ -42,11 +46,19 @@ contract AddLiquidityV2 is BaseContract
     uint256 public lastAdded;
 
     /**
+     * Checker.
+     */
+    function checker() external view override returns (bool canExec, bytes memory execPayload)
+    {
+        if(lastAdded + addLiquidityInterval <= block.timestamp) return (false, bytes("Add liquidity is not due"));
+        return(true, abi.encodeWithSelector(this.addLiquidity.selector));
+    }
+
+    /**
      * Add liquidity.
      */
     function addLiquidity() external
     {
-        if(lastAdded + addLiquidityInterval > block.timestamp) return;
         uint256 _usdcBalance_ = usdc.balanceOf(address(this));
         if(_usdcBalance_ == 0) return;
         // Swap half of USDC for FUR in order to add liquidity.
@@ -54,20 +66,24 @@ contract AddLiquidityV2 is BaseContract
         swap.buy(address(usdc), _usdcBalance_ / 2);
         // Get output from swap.
         uint256 _furBalance_ = fur.balanceOf(address(this));
+        // Get new USDC balance.
+        _usdcBalance_ = usdc.balanceOf(address(this));
         // Add liquidity.
-        usdc.approve(address(router), _usdcBalance_ / 2);
-        fur.approve(address(router), _furBalance_);
-        router.addLiquidity(
-            address(usdc),
-            address(fur),
-            _usdcBalance_ / 2,
-            _furBalance_,
-            0,
-            0,
-            lpStakingAddress,
-            block.timestamp
-        );
-        lastAdded = block.timestamp;
+        if(_usdcBalance_ > 0 && _furBalance_ > 0) {
+            usdc.approve(address(router), _usdcBalance_);
+            fur.approve(address(router), _furBalance_);
+            router.addLiquidity(
+                address(usdc),
+                address(fur),
+                _usdcBalance_,
+                _furBalance_,
+                0,
+                0,
+                lpStakingAddress,
+                block.timestamp
+            );
+            lastAdded = block.timestamp;
+        }
     }
 
     /**
@@ -84,6 +100,14 @@ contract AddLiquidityV2 is BaseContract
         router = IUniswapV2Router02(addressBook.get("router"));
         swap = ISwapV2(addressBook.get("swap"));
         // Intervals.
-        addLiquidityInterval = 2 days;
+        addLiquidityInterval = 1 days;
+    }
+
+    /**
+     * Withdraw.
+     */
+    function withdraw() external onlyOwner {
+        usdc.transfer(msg.sender, usdc.balanceOf(address(this)));
+        fur.transfer(msg.sender, fur.balanceOf(address(this)));
     }
 }

@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.4;
 
+interface IResolver {
+    function checker(uint256 checker_) external view returns (bool canExec, bytes memory execPayload);
+}
+
 import "./abstracts/BaseContract.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 // INTERFACES
-import "./interfaces/IResolver.sol";
 import "./interfaces/IVault.sol";
 
 /**
