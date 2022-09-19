@@ -58,7 +58,7 @@ contract TaxHandler is BaseContract, IResolver
      */
     function checker() external view override returns (bool canExec, bytes memory execPayload)
     {
-        if(lastDistribution + distributionInterval <= block.timestamp) return (false, bytes("Distribution is not due"));
+        if(lastDistribution + distributionInterval >= block.timestamp) return (false, bytes("Distribution is not due"));
         return(true, abi.encodeWithSelector(this.distribute.selector));
     }
 

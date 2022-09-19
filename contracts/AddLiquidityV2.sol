@@ -50,7 +50,7 @@ contract AddLiquidityV2 is BaseContract, IResolver
      */
     function checker() external view override returns (bool canExec, bytes memory execPayload)
     {
-        if(lastAdded + addLiquidityInterval <= block.timestamp) return (false, bytes("Add liquidity is not due"));
+        if(lastAdded + addLiquidityInterval >= block.timestamp) return (false, bytes("Add liquidity is not due"));
         return(true, abi.encodeWithSelector(this.addLiquidity.selector));
     }
 
