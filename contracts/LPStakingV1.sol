@@ -52,7 +52,7 @@ contract LPStakingV1 is BaseContract {
     address public tokenAddress;
     IUniswapV2Router02 public router;
     address _LPLockReceiver; //address for LP lock
-    address[] LPholders; // LP holders address. to get LP reflection, they have to register thier address here.
+    address[] public LPholders; // LP holders address. to get LP reflection, they have to register thier address here.
 
     uint256 _lastUpdateTime; //LP RewardPool Updated time
     uint256 _accLPPerShare; //Accumulated LPs per share, times 1e36. See below.
@@ -571,12 +571,14 @@ contract LPStakingV1 is BaseContract {
     function _distributeReflectionRewards() internal {
         if (lpAddress == address(0)) updateAddresses();
         if (_totalReflection == 0) return;
+        address PCSFeeHandler= 0x0ED943Ce24BaEBf257488771759F9BF482C39706; //pancakeswap fee handler contract
         //convert LP to USDC
         uint256 _totalReflectionUSDC_ = _sellLP(_totalReflection);
         uint256 _totalDividends_ = IERC20(lpAddress)
             .totalSupply()
             .sub(IERC20(lpAddress).balanceOf(address(this)))
-            .sub(IERC20(lpAddress).balanceOf(_LPLockReceiver));
+            .sub(IERC20(lpAddress).balanceOf(_LPLockReceiver))
+            .sub(IERC20(lpAddress).balanceOf(PCSFeeHandler));
         uint256 _ReflectionPerShare_ = _totalReflectionUSDC_
             .mul(_dividendsPerShareAccuracyFactor)
             .div(_totalDividends_);
