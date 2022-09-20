@@ -68,7 +68,7 @@ contract LPStakingV1 is BaseContract {
      * Mappings.
      */
     mapping(address => Staker) public stakers;
-    mapping(address => uint256) _LPholderIndexes;
+    mapping(address => uint256) public _LPholderIndexes;
     mapping(address => address[]) public pathFromTokenToUSDC;
     /**
      * Event.
