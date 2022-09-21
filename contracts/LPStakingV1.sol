@@ -554,17 +554,6 @@ contract LPStakingV1 is BaseContract {
     }
 
     /**
-     * remove LP holders address
-     */
-    function removeShareholder(address _holder) public {
-        LPholders[_LPholderIndexes[_holder]] = LPholders[LPholders.length - 1];
-        _LPholderIndexes[LPholders[LPholders.length - 1]] = _LPholderIndexes[
-            _holder
-        ];
-        LPholders.pop();
-    }
-
-    /**
      * LP reflection whenever stake and unstake
      *@notice give rewards with USDC
      */
@@ -592,7 +581,6 @@ contract LPStakingV1 is BaseContract {
                         _dividendsPerShareAccuracyFactor
                     )
                 );
-            if (_balance_ == 0) removeShareholder(LPholders[i]);
         }
         _totalReflection = 0;
     }
