@@ -2,6 +2,8 @@
 pragma solidity ^0.8.4;
 
 import "./abstracts/BaseContract.sol";
+import "@openzeppelin/contracts/utils/Base64.sol";
+import "@openzeppelin/contracts/utils/Strings.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC721/ERC721Upgradeable.sol";
 // Interfaces
 import "@openzeppelin/contracts/interfaces/IERC20.sol";
@@ -99,12 +101,50 @@ contract FurBot is BaseContract, ERC721Upgradeable
     }
 
     /**
+     * Token URI.
+     * @param tokenId_ The token ID.
+     * @return string The metadata json.
+     */
+    function tokenUri(uint256 tokenId_) external view returns(string memory)
+    {
+        require(tokenId_ > 0 && tokenId_ <= totalSupply, "Invalid token ID");
+        return string(
+            abi.encodePacked(
+                'data:application/json;base64,',
+                Base64.encode(
+                    bytes(
+                        abi.encodePacked(
+                            '{"name":"FurBot #',
+                            Strings.toString(tokenId_),
+                            '","description":"FurBot NFT Description","image":"',
+                            _generationImageUri[_tokenGenerationId[tokenId_]],
+                            '","attributes":',
+                            abi.encodePacked(
+                                '[{"trait_type":"Generation","value":"',
+                                Strings.toString(_tokenGenerationId[tokenId_]),
+                                '"},{"trait_type":"Investment","value":"',
+                                Strings.toString(_tokenInvestment[tokenId_]),
+                                '},{"trait_type":"Dividends Available","value":"',
+                                Strings.toString(availableDividendsByToken(tokenId_)),
+                                '},{"trait_type":"Dividends Claimed","value":"',
+                                Strings.toString(_tokenDividendsClaimed[tokenId_]),
+                                '}]'
+                            ),
+                            '}'
+                        )
+                    )
+                )
+            )
+        );
+    }
+
+    /**
      * Get active sale.
      * @return uint256 The sale ID.
      */
     function getActiveSale() public view returns(uint256)
     {
-        for(i = 1; i <= _saleIdTracker; i++) {
+        for(uint256 i = 1; i <= _saleIdTracker; i++) {
             if(_saleStart[i] <= block.timestamp && _saleEnd[i] >= block.timestamp) {
                 return i;
             }
@@ -118,7 +158,7 @@ contract FurBot is BaseContract, ERC721Upgradeable
      */
     function getNextSale() public view returns(uint256)
     {
-        for(i = 1; i <= _saleIdTracker; i++) {
+        for(uint256 i = 1; i <= _saleIdTracker; i++) {
             if(_saleStart[i] > block.timestamp) {
                 return i;
             }
@@ -206,14 +246,14 @@ contract FurBot is BaseContract, ERC721Upgradeable
         uint256 _dividends_;
         uint256 _totalDividends_;
         for(uint256 i = 1; i <= totalSupply; i++) {
-            if(ownerOf(i) == owner_) {
+            if(ownerOf(i) == msg.sender) {
                 _dividends_ = availableDividendsByToken(i);
                 _totalDividends_ += _dividends_;
                 _tokenDividendsClaimed[i] += _dividends_;
             }
         }
         require(paymentToken.transfer(msg.sender, _totalDividends_), "Transfer failed.");
-        emit DividendsClaimed(msg.sender, amount_);
+        emit DividendsClaimed(msg.sender, _totalDividends_);
     }
 
     /**
@@ -250,7 +290,7 @@ contract FurBot is BaseContract, ERC721Upgradeable
             require(start_ > _saleEnd[_saleIdTracker], "Start time must be after the previous sale.");
         }
         require(end_ > start_, "End time must be after start time.");
-        _saleGenerationId++;
+        _saleIdTracker++;
         _saleGenerationId[_saleIdTracker] = generationId_;
         _salePrice[_saleIdTracker] = price_;
         _saleStart[_saleIdTracker] = start_;

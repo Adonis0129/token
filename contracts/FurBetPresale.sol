@@ -2,6 +2,7 @@
 pragma solidity ^0.8.4;
 
 import "./abstracts/BaseContract.sol";
+import "@openzeppelin/contracts/utils/Base64.sol";
 // Interfaces.
 import "./interfaces/IFurBetToken.sol";
 import "./interfaces/IFurBetStake.sol";
