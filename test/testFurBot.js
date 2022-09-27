@@ -32,6 +32,33 @@ describe("Furbet", function () {
         it("Has the right total supply", async function () {
             expect(await furbot.totalSupply()).to.equal(0);
         });
+        it("Has the right total investment", async function () {
+            expect(await furbot.totalInvestment()).to.equal(0);
+        });
+        it("Has the right total dividends", async function () {
+            expect(await furbot.totalDividends()).to.equal(0);
+        });
+        it("Has the right payment token address", async function () {
+            expect(await furbot.paymentToken()).to.equal(usdc.address);
+        });
+    });
+
+    describe("Admin", function () {
+        it("Can create a generation", async function () {
+            expect(await furbot.createGeneration(5000, "https://example.com/image.jpg")).to.emit(furbot, "GenerationCreated").withArgs(1);
+        });
+        it("Cannot create a generation from non admin user", async function () {
+            await expect(furbot.connect(addr1).createGeneration(5000, "https://example.com/image.jpg")).to.be.revertedWith("Ownable: caller is not the owner");
+        });
+        it("Can create a sale", async function () {
+            timestamp = await getBlockTimestamp();
+            expect(await furbot.createGeneration(5000, "https://example.com/image.jpg")).to.emit(furbot, "GenerationCreated").withArgs(1);
+            expect(await furbot.createSale(1, 200, timestamp + 200, timestamp + 400)).to.emit(furbot, "SaleCreated").withArgs(1);
+        });
     });
 
 });
+
+async function getBlockTimestamp () {
+    return (await hre.ethers.provider.getBlock("latest")).timestamp;
+}

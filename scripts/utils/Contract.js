@@ -1,4 +1,5 @@
 const hre = require("hardhat");
+hre.upgrades.silenceWarnings();
 
 class Contract {
 
