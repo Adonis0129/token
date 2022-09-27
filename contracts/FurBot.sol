@@ -69,6 +69,7 @@ contract FurBot is BaseContract, ERC721Upgradeable
     event GenerationCreated(uint256 indexed id_);
     event SaleCreated(uint256 indexed id_);
     event TokenPurchased(uint256 indexed id_);
+    event DividendsAdded(uint256 indexed id_, uint256 amount_);
     event DividendsClaimed(address indexed owner_, uint256 amount_);
 
     /**
@@ -255,5 +256,19 @@ contract FurBot is BaseContract, ERC721Upgradeable
         _saleStart[_saleIdTracker] = start_;
         _saleEnd[_saleIdTracker] = end_;
         emit SaleCreated(_saleIdTracker);
+    }
+
+    /**
+     * Add dividends.
+     * @param generationId_ The generation ID for these dividends.
+     * @param amount_ Amount of dividends to add.
+     */
+    function addDividends(uint256 generationId_, uint256 amount_) external onlyOwner
+    {
+        require(generationId_ > 0 && generationId_ <= _generationIdTracker, "Invalid generation ID.");
+        require(paymentToken.transferFrom(msg.sender, address(this), amount_), "Payment failed.");
+        _generationDividends[generationId_] += amount_;
+        totalDividends += amount_;
+        emit DividendsAdded(generationId_, amount_);
     }
 }
