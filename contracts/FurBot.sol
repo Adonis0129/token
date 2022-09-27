@@ -130,7 +130,7 @@ contract FurBot is BaseContract, ERC721Upgradeable
      * Get active sale price.
      * @return uint256 The price.
      */
-    function getActiveSalePrice() public view returns(uint256)
+    function getActiveSalePrice() external view returns(uint256)
     {
         return _salePrice[getActiveSale()];
     }
@@ -139,7 +139,7 @@ contract FurBot is BaseContract, ERC721Upgradeable
      * Get next sale price.
      * @return uint256 The price.
      */
-    function getNextSalePrice() public view returns(uint256)
+    function getNextSalePrice() external view returns(uint256)
     {
         return _salePrice[getNextSale()];
     }
