@@ -190,13 +190,6 @@ contract FurMarket is BaseContract, ERC721Holder
      */
     function _deleteListing(uint256 listingId_) internal
     {
-        uint256 start;
-        address token;
-        uint256 id;
-        uint256 price;
-        uint256 offer;
-        address offerAddress;
-        address owner;
         _listings[listingId_].start = 0;
         _listings[listingId_].token = address(0);
         _listings[listingId_].id = 0;
