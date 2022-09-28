@@ -15,6 +15,8 @@ describe("Furbet", function () {
         contract = new Contract(addressbook.address);
         // Deploy USDC
         usdc = await contract.deploy("FakeToken", "payment", ["USD Coin", "USDC"]);
+        // Deploy vault
+        vault = await contract.deploy("Vault", "vault");
         // Deploy FurBot
         furbot = await contract.deploy("FurBot", "furbot");
         // Setup FurBot
@@ -38,9 +40,6 @@ describe("Furbet", function () {
         it("Has the right total dividends", async function () {
             expect(await furbot.totalDividends()).to.equal(0);
         });
-        it("Has the right payment token address", async function () {
-            expect(await furbot.paymentToken()).to.equal(usdc.address);
-        });
     });
 
     describe("Admin", function () {
@@ -53,7 +52,12 @@ describe("Furbet", function () {
         it("Can create a sale", async function () {
             timestamp = await getBlockTimestamp();
             expect(await furbot.createGeneration(5000, "https://example.com/image.jpg")).to.emit(furbot, "GenerationCreated").withArgs(1);
-            expect(await furbot.createSale(1, 200, timestamp + 200, timestamp + 400)).to.emit(furbot, "SaleCreated").withArgs(1);
+            expect(await furbot.createSale(1, 200, timestamp + 200, timestamp + 400, false)).to.emit(furbot, "SaleCreated").withArgs(1);
+        });
+        it("Cannot create a sale from non admin user", async function () {
+            timestamp = await getBlockTimestamp();
+            expect(await furbot.createGeneration(5000, "https://example.com/image.jpg")).to.emit(furbot, "GenerationCreated").withArgs(1);
+            await expect(furbot.connect(addr1).createSale(1, 200, timestamp + 200, timestamp + 400, false)).to.be.revertedWith("Ownable: caller is not the owner");
         });
     });
 

@@ -6,6 +6,7 @@ import "@openzeppelin/contracts/utils/Base64.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC721/ERC721Upgradeable.sol";
 // Interfaces
+import "./interfaces/IVault.sol";
 import "@openzeppelin/contracts/interfaces/IERC20.sol";
 
 /**
@@ -36,7 +37,9 @@ contract FurBot is BaseContract, ERC721Upgradeable
     /**
      * External contracts.
      */
-    IERC20 public paymentToken;
+    IERC20 private _paymentToken;
+    IVault private _vault;
+    address private _market;
 
     /**
      * Generations.
@@ -56,6 +59,7 @@ contract FurBot is BaseContract, ERC721Upgradeable
     mapping(uint256 => uint256) private _salePrice;
     mapping(uint256 => uint256) private _saleStart;
     mapping(uint256 => uint256) private _saleEnd;
+    mapping(uint256 => bool) private _saleRestricted;
 
     /**
      * Tokens.
@@ -79,7 +83,9 @@ contract FurBot is BaseContract, ERC721Upgradeable
      */
     function setup() external
     {
-        paymentToken = IERC20(addressBook.get("payment"));
+        _paymentToken = IERC20(addressBook.get("payment"));
+        _vault = IVault(addressBook.get("vault"));
+        _market = addressBook.get("market");
     }
 
     /**
@@ -92,12 +98,11 @@ contract FurBot is BaseContract, ERC721Upgradeable
         require(balanceOf(owner_) > index_, "Index out of bounds");
         for(uint256 i = 1; i <= totalSupply; i++) {
             if(ownerOf(i) == owner_) {
-                if(index_ == 0) {
-                    return i;
-                }
+                if(index_ == 0) return i;
                 index_--;
             }
         }
+        return 0;
     }
 
     /**
@@ -105,7 +110,7 @@ contract FurBot is BaseContract, ERC721Upgradeable
      * @param tokenId_ The token ID.
      * @return string The metadata json.
      */
-    function tokenUri(uint256 tokenId_) external view returns(string memory)
+    function tokenURI(uint256 tokenId_) public view override returns(string memory)
     {
         require(tokenId_ > 0 && tokenId_ <= totalSupply, "Invalid token ID");
         return string(
@@ -145,9 +150,7 @@ contract FurBot is BaseContract, ERC721Upgradeable
     function getActiveSale() public view returns(uint256)
     {
         for(uint256 i = 1; i <= _saleIdTracker; i++) {
-            if(_saleStart[i] <= block.timestamp && _saleEnd[i] >= block.timestamp) {
-                return i;
-            }
+            if(_saleStart[i] <= block.timestamp && _saleEnd[i] >= block.timestamp) return i;
         }
         return 0;
     }
@@ -159,9 +162,7 @@ contract FurBot is BaseContract, ERC721Upgradeable
     function getNextSale() public view returns(uint256)
     {
         for(uint256 i = 1; i <= _saleIdTracker; i++) {
-            if(_saleStart[i] > block.timestamp) {
-                return i;
-            }
+            if(_saleStart[i] > block.timestamp) return i;
         }
         return 0;
     }
@@ -188,14 +189,15 @@ contract FurBot is BaseContract, ERC721Upgradeable
      * Buy.
      * @param amount_ The amount of tokens to buy.
      */
-    function buy(uint256 amount_) external
+    function buy(uint256 amount_) external whenNotPaused
     {
         uint256 _saleId_ = getActiveSale();
         require(_saleId_ > 0, "No active sale.");
+        if(_saleRestricted[_saleId_]) require(_vault.rewardRate(msg.sender) == 250, "Not eligible for sale.");
         uint256 _generationId_ = _saleGenerationId[_saleId_];
         require(_generationTotalSupply[_generationId_] + amount_ <= _generationMaxSupply[_generationId_], "Max supply reached.");
         uint256 _investmentAmount_ = _salePrice[_saleId_] * amount_;
-        require(paymentToken.transferFrom(msg.sender, address(this), _investmentAmount_), "Payment failed.");
+        require(_paymentToken.transferFrom(msg.sender, address(this), _investmentAmount_), "Payment failed.");
         for(uint256 i = 1; i <= amount_; i++) {
             _tokenIdTracker++;
             totalSupply++;
@@ -211,15 +213,14 @@ contract FurBot is BaseContract, ERC721Upgradeable
 
     /**
      * Available dividends by owner.
+     * @param owner_ The owner address.
      * @return uint256 The available dividends.
      */
-    function availableDividends() external view returns(uint256)
+    function availableDividendsByAddress(address owner_) external view returns(uint256)
     {
         uint256 _dividends_;
         for(uint256 i = 1; i <= totalSupply; i++) {
-            if(ownerOf(i) == msg.sender) {
-                _dividends_ += availableDividendsByToken(i);
-            }
+            if(ownerOf(i) == owner_) _dividends_ += availableDividendsByToken(i);
         }
         return _dividends_;
     }
@@ -231,16 +232,14 @@ contract FurBot is BaseContract, ERC721Upgradeable
      */
     function availableDividendsByToken(uint256 tokenId_) public view returns(uint256)
     {
-        uint256 _generationId_ = _tokenGenerationId[tokenId_];
-        require(_generationId_ > 0, "Invalid token ID.");
-        uint256 _dividendsPerShare_ = _generationDividends[_generationId_] / _generationTotalSupply[_generationId_];
-        return _dividendsPerShare_ - _tokenDividendsClaimed[tokenId_];
+        require(_tokenGenerationId[tokenId_] > 0, "Invalid token ID.");
+        return (_generationDividends[_tokenGenerationId[tokenId_]] / _generationTotalSupply[_tokenGenerationId[tokenId_]]) - _tokenDividendsClaimed[tokenId_];
     }
 
     /**
      * Claim dividends.
      */
-    function claimDividends() external
+    function claimDividends() external whenNotPaused
     {
         require(balanceOf(msg.sender) > 0, "No tokens owned.");
         uint256 _dividends_;
@@ -252,8 +251,32 @@ contract FurBot is BaseContract, ERC721Upgradeable
                 _tokenDividendsClaimed[i] += _dividends_;
             }
         }
-        require(paymentToken.transfer(msg.sender, _totalDividends_), "Transfer failed.");
+        require(_paymentToken.transfer(msg.sender, _totalDividends_), "Transfer failed.");
         emit DividendsClaimed(msg.sender, _totalDividends_);
+    }
+
+    /**
+     * Approve.
+     * @param to_ The address to approve.
+     * @param tokenId_ The token ID.
+     * @dev Overridden to prevent token sales through third party marketplaces.
+     */
+    function approve(address to_, uint256 tokenId_) public virtual override whenNotPaused
+    {
+        require(to_ == _market, "Third party marketplaces not allowed.");
+        super.approve(to_, tokenId_);
+    }
+
+    /**
+     * Set approval for all.
+     * @param operator_ The operator address.
+     * @param approved_ The approval status.
+     * @dev Overridden to prevent token sales through third party marketplaces.
+     */
+    function setApprovalForAll(address operator_, bool approved_) public virtual override whenNotPaused
+    {
+        require(operator_ == _market, "Third party marketplaces not allowed.");
+        super.setApprovalForAll(operator_, approved_);
     }
 
     /**
@@ -281,8 +304,9 @@ contract FurBot is BaseContract, ERC721Upgradeable
      * @param price_ The price for this sale.
      * @param start_ The start time for this sale.
      * @param end_ The end time for this sale.
+     * @param restricted_ Whether this sale is restricted to whitelisted addresses.
      */
-    function createSale(uint256 generationId_, uint256 price_, uint256 start_, uint256 end_) external onlyOwner
+    function createSale(uint256 generationId_, uint256 price_, uint256 start_, uint256 end_, bool restricted_) external onlyOwner
     {
         require(generationId_ > 0 && generationId_ <= _generationIdTracker, "Invalid generation ID.");
         require(start_ > block.timestamp, "Start time must be in the future.");
@@ -295,6 +319,7 @@ contract FurBot is BaseContract, ERC721Upgradeable
         _salePrice[_saleIdTracker] = price_;
         _saleStart[_saleIdTracker] = start_;
         _saleEnd[_saleIdTracker] = end_;
+        _saleRestricted[_saleIdTracker] = restricted_;
         emit SaleCreated(_saleIdTracker);
     }
 
@@ -306,7 +331,7 @@ contract FurBot is BaseContract, ERC721Upgradeable
     function addDividends(uint256 generationId_, uint256 amount_) external onlyOwner
     {
         require(generationId_ > 0 && generationId_ <= _generationIdTracker, "Invalid generation ID.");
-        require(paymentToken.transferFrom(msg.sender, address(this), amount_), "Payment failed.");
+        require(_paymentToken.transferFrom(msg.sender, address(this), amount_), "Payment failed.");
         _generationDividends[generationId_] += amount_;
         totalDividends += amount_;
         emit DividendsAdded(generationId_, amount_);
