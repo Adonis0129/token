@@ -33,34 +33,26 @@ contract FurMarket is BaseContract, ERC721Holder
      * Listings.
      */
     uint256 private _listingIdTracker;
-    mapping(uint256 => uint256) _listingStartTime;
-    mapping(uint256 => address) _listingTokenAddress;
-    mapping(uint256 => uint256) _listingTokenId;
-    mapping(uint256 => uint256) _listingPrice;
-    mapping(uint256 => uint256) _listingHighestOffer;
-    mapping(uint256 => address) _listingHighestOfferAddress;
-    mapping(uint256 => address) _listingOwnerAddress;
-
     struct Listing {
+        uint256 start;
+        address token;
         uint256 id;
-        uint256 startTime;
-        address tokenAddress;
-        uint256 tokenId;
         uint256 price;
-        uint256 highestOffer;
-        address highestOfferAddress;
-        address ownerAddress;
+        uint256 offer;
+        address offerAddress;
+        address owner;
     }
+    mapping(uint256 => Listing) _listings;
 
     /**
      * Events.
      */
-    event ListingCreated(uint256 indexed listingId, address tokenAddress, uint256 tokenId, uint256 price);
-    event ListingCancelled(uint256 indexed listingId);
-    event NftPurchased(uint256 indexed listingId, address tokenAddress, uint256 tokenId, address buyerAddress, uint256 price);
-    event OfferPlaced(uint256 indexed listingId, address buyerAddress, uint256 price);
-    event OfferAccepted(uint256 indexed listingId, address buyerAddress, uint256 price);
-    event OfferRejected(uint256 indexed listingId, address buyerAddress, uint256 price);
+    event ListingCreated(Listing);
+    event ListingCancelled(Listing);
+    event NftPurchased(Listing);
+    event OfferPlaced(Listing);
+    event OfferAccepted(Listing);
+    event OfferRejected(Listing);
 
     /**
      * List NFT.
@@ -73,13 +65,13 @@ contract FurMarket is BaseContract, ERC721Holder
         IERC721 _token_ = IERC721(tokenAddress_);
         require(_token_.supportsInterface(type(IERC721).interfaceId), "Token must be ERC721");
         _transferERC721(tokenAddress_, tokenId_, msg.sender, address(this));
-        require(_token_.ownerOf(tokenId_) == address(this), "Token transfer failed");
         _listingIdTracker++;
-        _listingStartTime[_listingIdTracker] = block.timestamp;
-        _listingTokenAddress[_listingIdTracker] = tokenAddress_;
-        _listingTokenId[_listingIdTracker] = tokenId_;
-        _listingPrice[_listingIdTracker] = price_;
-        emit ListingCreated(_listingIdTracker, tokenAddress_, tokenId_, price_);
+        _listings[_listingIdTracker].start = block.timestamp;
+        _listings[_listingIdTracker].token = tokenAddress_;
+        _listings[_listingIdTracker].id = tokenId_;
+        _listings[_listingIdTracker].price = price_;
+        _listings[_listingIdTracker].owner = msg.sender;
+        emit ListingCreated(_listings[_listingIdTracker]);
     }
 
     /**
@@ -88,10 +80,10 @@ contract FurMarket is BaseContract, ERC721Holder
      */
     function cancelListing(uint256 listingId_) external whenNotPaused
     {
-        require(_listingStartTime[listingId_] > 0, "Listing does not exist");
-        require(_listingOwnerAddress[listingId_] == msg.sender, "Only the listing owner can cancel the listing");
-        _transferERC721(_listingTokenAddress[listingId_], _listingTokenId[listingId_], address(this), msg.sender);
-        emit ListingCancelled(listingId_);
+        require(_listings[listingId_].start > 0, "Listing does not exist");
+        require(_listings[listingId_].owner == msg.sender, "Only the listing owner can cancel the listing");
+        _transferERC721(_listings[listingId_].token, _listings[listingId_].id, address(this), msg.sender);
+        emit ListingCancelled(_listings[listingId_]);
         _deleteListing(listingId_);
     }
 
@@ -101,10 +93,10 @@ contract FurMarket is BaseContract, ERC721Holder
      */
     function buyNft(uint256 listingId_) external whenNotPaused
     {
-        require(_listingStartTime[listingId_] > 0, "Listing does not exist");
-        require(_paymentToken.transferFrom(msg.sender, _listingOwnerAddress[listingId_], _listingPrice[listingId_]), "Payment failed");
-        _transferERC721(_listingTokenAddress[listingId_], _listingTokenId[listingId_], address(this), msg.sender);
-        emit NftPurchased(listingId_, _listingTokenAddress[listingId_], _listingTokenId[listingId_], msg.sender, _listingPrice[listingId_]);
+        require(_listings[listingId_].start > 0, "Listing does not exist");
+        require(_paymentToken.transferFrom(msg.sender, _listings[listingId_].owner, _listings[listingId_].price), "Payment failed");
+        _transferERC721(_listings[listingId_].token, _listings[listingId_].id, address(this), msg.sender);
+        emit NftPurchased(_listings[listingId_]);
         _deleteListing(listingId_);
     }
 
@@ -115,15 +107,12 @@ contract FurMarket is BaseContract, ERC721Holder
      */
     function makeOffer(uint256 listingId_, uint256 offer_) external whenNotPaused
     {
-        require(_listingStartTime[listingId_] > 0, "Listing does not exist");
-        require(offer_ > _listingHighestOffer[listingId_], "Offer must be higher than the highest offer");
+        require(_listings[listingId_].start > 0, "Listing does not exist");
+        require(offer_ > _listings[listingId_].offer, "Offer must be higher than the highest offer");
         require(_paymentToken.transferFrom(msg.sender, address(this), offer_), "Payment failed");
-        if (_listingHighestOffer[listingId_] > 0) {
-            require(_paymentToken.transfer(_listingHighestOfferAddress[listingId_], _listingHighestOffer[listingId_]), "Payment failed");
-        }
-        _listingHighestOffer[listingId_] = offer_;
-        _listingHighestOfferAddress[listingId_] = msg.sender;
-        emit OfferPlaced(listingId_, msg.sender, offer_);
+        _listings[listingId_].offer = offer_;
+        _listings[listingId_].offerAddress = msg.sender;
+        emit OfferPlaced(_listings[listingId_]);
     }
 
     /**
@@ -132,12 +121,12 @@ contract FurMarket is BaseContract, ERC721Holder
      */
     function acceptOffer(uint256 listingId_) external whenNotPaused
     {
-        require(_listingStartTime[listingId_] > 0, "Listing does not exist");
-        require(_listingOwnerAddress[listingId_] == msg.sender, "Only the listing owner can accept the offer");
-        _transferERC721(_listingTokenAddress[listingId_], _listingTokenId[listingId_], address(this), _listingHighestOfferAddress[listingId_]);
-        require(_paymentToken.transfer(_listingOwnerAddress[listingId_], _listingHighestOffer[listingId_]), "Payment failed");
-        emit OfferAccepted(listingId_, _listingHighestOfferAddress[listingId_], _listingHighestOffer[listingId_]);
-        emit NftPurchased(listingId_, _listingTokenAddress[listingId_], _listingTokenId[listingId_], _listingHighestOfferAddress[listingId_], _listingHighestOffer[listingId_]);
+        require(_listings[listingId_].start > 0, "Listing does not exist");
+        require(_listings[listingId_].owner == msg.sender, "Only the listing owner can accept the offer");
+        require(_paymentToken.transfer(_listings[listingId_].owner, _listings[listingId_].offer), "Payment failed");
+        _transferERC721(_listings[listingId_].token, _listings[listingId_].id, address(this), _listings[listingId_].offerAddress);
+        emit OfferAccepted(_listings[listingId_]);
+        emit NftPurchased(_listings[listingId_]);
         _deleteListing(listingId_);
     }
 
@@ -147,12 +136,12 @@ contract FurMarket is BaseContract, ERC721Holder
      */
     function rejectOffer(uint256 listingId_) external whenNotPaused
     {
-        require(_listingStartTime[listingId_] > 0, "Listing does not exist");
-        require(_listingOwnerAddress[listingId_] == msg.sender, "Only the listing owner can reject the offer");
-        require(_paymentToken.transfer(_listingHighestOfferAddress[listingId_], _listingHighestOffer[listingId_]), "Payment failed");
-        emit OfferRejected(listingId_, _listingHighestOfferAddress[listingId_], _listingHighestOffer[listingId_]);
-        _listingHighestOffer[listingId_] = 0;
-        _listingHighestOfferAddress[listingId_] = address(0);
+        require(_listings[listingId_].start > 0, "Listing does not exist");
+        require(_listings[listingId_].owner == msg.sender, "Only the listing owner can reject the offer");
+        require(_paymentToken.transfer(_listings[listingId_].offerAddress, _listings[listingId_].offer), "Payment failed");
+        emit OfferRejected(_listings[listingId_]);
+        _listings[listingId_].offer = 0;
+        _listings[listingId_].offerAddress = address(0);
     }
 
     /**
@@ -166,19 +155,30 @@ contract FurMarket is BaseContract, ERC721Holder
         uint256 i;
         if(cursor_ == 0) cursor_ = _listingIdTracker;
         for(cursor_ = cursor_; cursor_ > cursor_; cursor_ --) {
-            if (_listingStartTime[cursor_] > 0) {
-                _listings_[i] = Listing({
-                    id: cursor_,
-                    startTime: _listingStartTime[cursor_],
-                    tokenAddress: _listingTokenAddress[cursor_],
-                    tokenId: _listingTokenId[cursor_],
-                    price: _listingPrice[cursor_],
-                    highestOffer: _listingHighestOffer[cursor_],
-                    highestOfferAddress: _listingHighestOfferAddress[cursor_],
-                    ownerAddress: _listingOwnerAddress[cursor_]
-                });
+            if (_listings[cursor_].start > 0) {
+                _listings_[i] = _listings[cursor_];
                 i++;
                 if(i == limit_) cursor_ = 0;
+            }
+        }
+        return _listings_;
+    }
+
+    /**
+     * Get oldest listings.
+     * @param cursor_ The cursor.
+     * @param limit_ The limit.
+     */
+    function getOldestListings(uint256 cursor_, uint256 limit_) external view returns (Listing[] memory)
+    {
+        Listing[] memory _listings_ = new Listing[](limit_);
+        uint256 i;
+        if(cursor_ == 0) cursor_ = 1;
+        for(cursor_ = cursor_; cursor_ <= _listingIdTracker; cursor_ ++) {
+            if (_listings[cursor_].start > 0) {
+                _listings_[i] = _listings[cursor_];
+                i++;
+                if(i == limit_) cursor_ = _listingIdTracker + 1;
             }
         }
         return _listings_;
@@ -190,13 +190,20 @@ contract FurMarket is BaseContract, ERC721Holder
      */
     function _deleteListing(uint256 listingId_) internal
     {
-        _listingStartTime[listingId_] = 0;
-        _listingTokenAddress[listingId_] = address(0);
-        _listingTokenId[listingId_] = 0;
-        _listingPrice[listingId_] = 0;
-        _listingHighestOffer[listingId_] = 0;
-        _listingHighestOfferAddress[listingId_] = address(0);
-        _listingOwnerAddress[listingId_] = address(0);
+        uint256 start;
+        address token;
+        uint256 id;
+        uint256 price;
+        uint256 offer;
+        address offerAddress;
+        address owner;
+        _listings[listingId_].start = 0;
+        _listings[listingId_].token = address(0);
+        _listings[listingId_].id = 0;
+        _listings[listingId_].price = 0;
+        _listings[listingId_].offer = 0;
+        _listings[listingId_].offerAddress = address(0);
+        _listings[listingId_].owner = address(0);
     }
 
     /**
